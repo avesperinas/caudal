@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">
+  <rect width="40" height="40" rx="9" fill="#EFDF00"/>
+  <!-- Diamante Renault: lozenge doble (outer + inner cutout) -->
+  <!-- Outer diamond (navy) -->
+  <polygon points="20,4 34,20 20,36 6,20" fill="#1C274C"/>
+  <!-- Inner cutout (yellow) para crear el efecto lozenge -->
+  <polygon points="20,11 27,20 20,29 13,20" fill="#EFDF00"/>
+</svg>

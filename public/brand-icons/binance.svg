@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">
+  <rect width="40" height="40" rx="9" fill="#F0B90B"/>
+  <!-- BNB Logo: 5 diamantes en cruz (center + N/S/E/W) -->
+  <g fill="#1E2026">
+    <!-- Centro (hw=6) -->
+    <polygon points="20,14 26,20 20,26 14,20"/>
+    <!-- Norte (hw=4, center 20,9) -->
+    <polygon points="20,5 24,9 20,13 16,9"/>
+    <!-- Este (hw=4, center 31,20) -->
+    <polygon points="31,16 35,20 31,24 27,20"/>
+    <!-- Sur (hw=4, center 20,31) -->
+    <polygon points="20,27 24,31 20,35 16,31"/>
+    <!-- Oeste (hw=4, center 9,20) -->
+    <polygon points="9,16 13,20 9,24 5,20"/>
+  </g>
+</svg>

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">
+  <defs>
+    <linearGradient id="rg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#3A6EDE"/>
+      <stop offset="100%" stop-color="#1A2E6E"/>
+    </linearGradient>
+  </defs>
+  <rect width="40" height="40" rx="9" fill="#0D0D0D"/>
+  <!-- R estilizada con cola característica -->
+  <text
+    x="19.5" y="28"
+    font-family="Arial Black, Arial, sans-serif"
+    font-weight="900"
+    font-size="24"
+    fill="white"
+    text-anchor="middle"
+  >R</text>
+  <!-- Cola diagonal de la R, estilo Revolut -->
+  <line x1="25" y1="22" x2="30" y2="30" stroke="white" stroke-width="3" stroke-linecap="round"/>
+</svg>
