@@ -1,0 +1,1 @@
+ALTER TABLE "SharedYearConfig" ADD COLUMN "settled" BOOLEAN NOT NULL DEFAULT false;

@@ -1,0 +1,3 @@
+ALTER TABLE "SharedYearConfig" ADD COLUMN "productId" TEXT;
+ALTER TABLE "SharedYearConfig" ADD CONSTRAINT "SharedYearConfig_productId_fkey"
+  FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE SET NULL ON UPDATE CASCADE;
