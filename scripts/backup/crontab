@@ -1,0 +1,2 @@
+# Backup mensual: día 5 de cada mes a las 08:00
+0 8 5 * * /backup.sh >> /var/log/backup.log 2>&1
