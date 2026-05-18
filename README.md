@@ -1,56 +1,56 @@
 # Caudal
 
-Gestor personal de finanzas autoalojado. Trackea **patrimonio** (snapshots de productos financieros) y **flujo** (ingresos, gastos personales y compartidos, aportaciones), con dashboards de análisis y backup mensual por email.
+Self-hosted personal finance manager. Tracks **net worth** (snapshots of financial products) and **cash flow** (income, personal and shared expenses, contributions), with analytics dashboards and monthly email backups.
 
-> *Caudal*: en castellano, "flujo de agua" y "riqueza". Las dos secciones core de la app.
+> *Caudal*: Spanish for "water flow" and "wealth". The two core sections of the app.
 
 ## Stack
 
 - **Next.js 15** (App Router) + **TypeScript** + **Tailwind v4** + **shadcn/ui**
 - **PostgreSQL 16** + **Prisma 6**
 - **Auth.js v5** (NextAuth)
-- **Docker Compose** para BD, app y servicio de backup
-- **Resend** (opcional) para envío de backups por email
+- **Docker Compose** for the database, app and backup service
+- **Resend** (optional) for sending backups by email
 
 ## Quick start
 
-Requisitos: Docker + Docker Compose.
+Requirements: Docker + Docker Compose.
 
 ```bash
 cp .env.example .env.local
-# edita .env.local con tus secretos (AUTH_SECRET, etc.)
+# edit .env.local with your secrets (AUTH_SECRET, etc.)
 
 docker compose up -d --build
 ```
 
-Abre [http://localhost:3000](http://localhost:3000) y registra tu usuario.
+Open [http://localhost:3000](http://localhost:3000) and register your user.
 
-Para cargar datos de ejemplo:
+To load sample data:
 
 ```bash
 docker compose exec app npx prisma migrate dev
-node scripts/seed-mock.mjs    # datos sintéticos: 4 entidades, 6 productos, snapshots 2023-2026
+node scripts/seed-mock.mjs    # synthetic data: 4 entities, 6 products, snapshots 2023-2026
 ```
 
-## Funcionalidades
+## Features
 
-- **Personal**: ingresos, gastos y aportaciones a productos por mes/año.
-- **Compartido**: gastos comunes con cálculo de split (50/50 o proporcional a ingresos).
-- **Productos**: cuentas, fondos, ETFs, planes de pensiones, inmuebles, cripto.
-- **Snapshots**: registro periódico del valor de cada producto.
+- **Personal**: income, expenses and contributions to products by month/year.
+- **Shared**: common expenses with split calculation (50/50 or proportional to income).
+- **Products**: accounts, funds, ETFs, pension plans, real estate, crypto.
+- **Snapshots**: periodic recording of each product's value.
 - **Dashboards**:
-  - *Flujo*: ingresos vs gastos, tasa de ahorro, evolución mensual/anual.
-  - *Inversiones*: cartera, rentabilidad, TIR, distribución.
-  - *Patrimonio*: evolución del neto, distribución por tipo/entidad.
-- **Filtros**: por categoría o producto individual en los dashboards.
-- **PWA**: instalable, responsive, navegación móvil con drawer.
-- **Backups mensuales**: ZIP de CSVs por usuario, opcionalmente enviados por email.
+  - *Cash flow*: income vs expenses, savings rate, monthly/annual evolution.
+  - *Investments*: portfolio, returns, IRR, distribution.
+  - *Net worth*: net evolution, distribution by type/entity.
+- **Filters**: by category or individual product across the dashboards.
+- **PWA**: installable, responsive, mobile navigation with drawer.
+- **Monthly backups**: per-user CSV ZIP, optionally sent by email.
 
-## Configuración del backup mensual
+## Monthly backup configuration
 
-Por defecto (sin Resend), guarda ZIPs en el volumen Docker `backups`. Para habilitar envío por email, configura `RESEND_API_KEY` y `BACKUP_FROM_EMAIL` en `.env.local`. Detalles en [`scripts/backup/SETUP.md`](scripts/backup/SETUP.md).
+By default (without Resend), it stores ZIPs in the `backups` Docker volume. To enable email delivery, set `RESEND_API_KEY` and `BACKUP_FROM_EMAIL` in `.env.local`. Details in [`scripts/backup/SETUP.md`](scripts/backup/SETUP.md).
 
-## Documentación
+## Documentation
 
-- [`CLAUDE.md`](CLAUDE.md) — convenciones de código y arquitectura.
-- [`scripts/backup/SETUP.md`](scripts/backup/SETUP.md) — backups y Resend.
+- [`CLAUDE.md`](CLAUDE.md) — code conventions and architecture.
+- [`scripts/backup/SETUP.md`](scripts/backup/SETUP.md) — backups and Resend.
