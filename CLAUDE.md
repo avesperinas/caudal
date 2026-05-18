@@ -1,77 +1,77 @@
 # Caudal — CLAUDE.md
 
-## Proyecto
+## Project
 
-App personal de gestión financiera (patrimonio + flujo). Escala pequeña (pocos usuarios, uso personal/familiar).
-Desarrollo incremental e iterativo: no adelantar features, no over-engineer.
+Personal finance management app (net worth + cash flow). Small scale (few users, personal/family use).
+Incremental and iterative development: don't get ahead on features, don't over-engineer.
 
 ## Stack
 
 - **Framework**: Next.js 15 (App Router) + TypeScript
-- **Estilos**: Tailwind CSS v4 + shadcn/ui
-- **Base de datos**: PostgreSQL (vía Docker)
+- **Styling**: Tailwind CSS v4 + shadcn/ui
+- **Database**: PostgreSQL (via Docker)
 - **ORM**: Prisma
 - **Auth**: Auth.js v5 (NextAuth)
-- **Deploy**: Docker Compose en servidor propio
+- **Deploy**: Docker Compose on self-hosted server
 
-## Principios de diseño
+## Design principles
 
-- Estilo limpio, moderno y minimalista. Coherente en toda la app.
-- Optimizado para PC y móvil (PWA).
-- Design tokens centralizados en `globals.css` (colores, radios, tipografía).
-- Componentes shadcn/ui como base — se personalizan, no se reescriben.
+- Clean, modern and minimalist style. Consistent across the whole app.
+- Optimized for desktop and mobile (PWA).
+- Design tokens centralized in `globals.css` (colors, radii, typography).
+- shadcn/ui components as the base — customize them, don't rewrite them.
 
-## Sistema de estilos — reglas de centralización
+## Styling system — centralization rules
 
-**REGLA CORE: ninguna clase Tailwind de estilo se repite "a mano" en más de un sitio.**
+**CORE RULE: no Tailwind styling class is repeated "by hand" in more than one place.**
 
-### Capas del sistema (de más genérico a más específico)
+### System layers (from most generic to most specific)
 
-1. **`globals.css`** — design tokens: colores, radios, tipografía base. Solo variables CSS.
-2. **`src/lib/styles.ts`** — constantes de clases Tailwind reutilizables (typography, layout, finance).
-   - Usar siempre que un patrón de clases aparezca en 2+ lugares.
-   - Usar `cva()` para variantes con lógica (ej: importe positivo/negativo).
-3. **`src/components/ui/`** — componentes atómicos de shadcn (Button, Card, Badge…).
-4. **`src/components/layout/`** — shells y wrappers de página (`PageShell`, `PageHeader`, `Section`).
-5. **`src/components/finance/`** — componentes del dominio (`TransactionRow`, `StatCard`…).
+1. **`globals.css`** — design tokens: colors, radii, base typography. CSS variables only.
+2. **`src/lib/styles.ts`** — reusable Tailwind class constants (typography, layout, finance).
+   - Use whenever a class pattern appears in 2+ places.
+   - Use `cva()` for variants with logic (e.g. positive/negative amount).
+3. **`src/components/ui/`** — atomic shadcn components (Button, Card, Badge…).
+4. **`src/components/layout/`** — page shells and wrappers (`PageShell`, `PageHeader`, `Section`).
+5. **`src/components/finance/`** — domain components (`TransactionRow`, `StatCard`…).
 
-### Lo que NO se hace
+### What NOT to do
 
-- No escribir `text-sm text-muted-foreground` directamente en páginas — usar `tx.secondary` de `styles.ts`.
-- No definir colores de positivo/negativo inline — usar las variantes de `styles.ts`.
-- No crear layout wrappers en cada página — usar los de `components/layout/`.
-- No duplicar lógica de formateo de moneda — centralizar en `src/lib/format.ts`.
+- Don't write `text-sm text-muted-foreground` directly in pages — use `tx.secondary` from `styles.ts`.
+- Don't define positive/negative colors inline — use the variants from `styles.ts`.
+- Don't create layout wrappers in each page — use the ones in `components/layout/`.
+- Don't duplicate currency formatting logic — centralize it in `src/lib/format.ts`.
 
-## Estructura de carpetas
+## Folder structure
 
 ```
 src/
 ├── app/
-│   ├── (auth)/          # login, registro
-│   ├── (dashboard)/     # rutas autenticadas
-│   └── (style-test)/    # solo desarrollo: pruebas visuales
+│   ├── (auth)/          # login, signup
+│   ├── (dashboard)/     # authenticated routes
+│   └── (style-test)/    # development only: visual tests
 ├── components/
-│   ├── ui/              # shadcn/ui components (no editar directamente)
+│   ├── ui/              # shadcn/ui components (do not edit directly)
 │   ├── layout/          # shell, nav, sidebar
-│   └── finance/         # componentes específicos del dominio
+│   └── finance/         # domain-specific components
 ├── lib/                 # prisma client, auth config, utils
-└── types/               # tipos TypeScript del dominio
+└── types/               # domain TypeScript types
 ```
 
-## Convenciones
+## Conventions
 
-- Rutas en grupos `(nombre)` para compartir layouts sin añadir segmento de URL — `(auth)/login/page.tsx` → `/login`, no `/auth/login`.
-- Las carpetas con paréntesis NO crean URL. Para una ruta `/foo` la carpeta debe llamarse `foo`, no `(foo)`.
-- Server Components por defecto; "use client" solo cuando necesario.
-- Estilos solo con clases Tailwind, sin CSS inline ni módulos CSS.
-- Nombres de archivos: `kebab-case` para rutas, `PascalCase` para componentes.
-- No añadir librerías sin consenso — mantener dependencias mínimas.
-- `Button` usa `@base-ui/react/button` — **no soporta `asChild`**. Para botones-link usar `buttonVariants` directamente sobre `<Link>`.
+- Routes in `(name)` groups to share layouts without adding a URL segment — `(auth)/login/page.tsx` → `/login`, not `/auth/login`.
+- Folders with parentheses do NOT create a URL. For a `/foo` route the folder must be named `foo`, not `(foo)`.
+- Server Components by default; "use client" only when needed.
+- Styling only with Tailwind classes, no inline CSS or CSS modules.
+- File names: `kebab-case` for routes, `PascalCase` for components.
+- Don't add libraries without consensus — keep dependencies minimal.
+- `Button` uses `@base-ui/react/button` — **it does not support `asChild`**. For link-buttons use `buttonVariants` directly on `<Link>`.
 
-## Estado actual
+## Current status
 
-- [x] Scaffolding Next.js 15 + Tailwind v4 + shadcn/ui
-- [ ] Pruebas de estilo visual
-- [ ] Auth básica (login, sesión)
-- [ ] Skeleton (home, perfil)
-- [ ] Features de finanzas
+- [x] Next.js 15 + Tailwind v4 + shadcn/ui scaffolding
+- [x] Visual style tests
+- [x] Basic auth (login, session)
+- [x] Skeleton (home, profile)
+- [x] Finance features
