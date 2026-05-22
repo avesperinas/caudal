@@ -26,6 +26,7 @@ model User {
   receivedFriendRequests Friendship[] @relation("FriendshipReceiver")
   sharedAccountOwned     SharedAccountAccess[] @relation("SharedAccountOwner")
   sharedAccountAccess    SharedAccountAccess[] @relation("SharedAccountCollaborator")
+  archivedCompartidos    ArchivedCompartido[]
   entities    Entity[]
   products    Product[]
   snapshots   ProductSnapshot[]
@@ -100,15 +101,32 @@ enum FriendshipStatus {
 }
 
 model SharedAccountAccess {
-  id                 String   @id @default(cuid())
+  id                 String             @id @default(cuid())
   ownerUserId        String
   collaboratorUserId String
-  createdAt          DateTime @default(now())
+  status             SharedAccessStatus @default(PENDING)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
   owner        User @relation("SharedAccountOwner",        fields: [ownerUserId],        references: [id], onDelete: Cascade)
   collaborator User @relation("SharedAccountCollaborator", fields: [collaboratorUserId], references: [id], onDelete: Cascade)
 
   @@unique([ownerUserId, collaboratorUserId])
+}
+
+enum SharedAccessStatus {
+  PENDING
+  ACCEPTED
+}
+
+model ArchivedCompartido {
+  id         String   @id @default(cuid())
+  userId     String
+  data       Json
+  reason     String?
+  archivedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // ─── Productos / Patrimonio ───────────────────────────────────────────────────

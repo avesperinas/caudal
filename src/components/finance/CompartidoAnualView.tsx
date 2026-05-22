@@ -21,6 +21,10 @@ import {
   createDeposit, updateDeposit, deleteDeposit,
 } from "@/app/(dashboard)/gastos/actions"
 
+const SWAP_PAYER: Record<SharedPayer, SharedPayer> = {
+  ACCOUNT: "ACCOUNT", PERSON1: "PERSON2", PERSON2: "PERSON1",
+}
+
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 type Props = {
@@ -35,19 +39,22 @@ type Props = {
   isOwner?: boolean
   ownerName?: string | null
   sharedAccounts?: { id: string; name: string | null }[]
+  /** El colaborador ve Persona 1 ↔ 2 intercambiadas; al guardar hay que revertir. */
+  personSwapped?: boolean
 }
 
 const fieldCls = "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
 
 // ─── ExpenseDialog ────────────────────────────────────────────────────────────
 
-function ExpenseDialog({ open, onClose, year, month, categories, p1Name, p2Name, editing, ownerUserId }: {
+function ExpenseDialog({ open, onClose, year, month, categories, p1Name, p2Name, editing, ownerUserId, personSwapped }: {
   open: boolean; onClose: () => void
   year: number; month: number
   categories: SharedCategory[]
   p1Name: string; p2Name: string
   editing: ExpenseWithCategory | null
   ownerUserId?: string
+  personSwapped?: boolean
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -67,10 +74,11 @@ function ExpenseDialog({ open, onClose, year, month, categories, p1Name, p2Name,
     const amt = parseFloat(amount.replace(",", "."))
     if (isNaN(amt) || amt <= 0) return
     startTransition(async () => {
+      const savePaidBy = personSwapped ? SWAP_PAYER[paidBy] : paidBy
       if (editing) {
-        await updateExpense(editing.id, { categoryId, amount: amt, paidBy, note: note || undefined }, ownerUserId)
+        await updateExpense(editing.id, { categoryId, amount: amt, paidBy: savePaidBy, note: note || undefined }, ownerUserId)
       } else {
-        await createExpense({ year, month, categoryId, amount: amt, paidBy, note: note || undefined }, ownerUserId)
+        await createExpense({ year, month, categoryId, amount: amt, paidBy: savePaidBy, note: note || undefined }, ownerUserId)
       }
       router.refresh(); onClose()
     })
@@ -126,12 +134,13 @@ function ExpenseDialog({ open, onClose, year, month, categories, p1Name, p2Name,
 
 // ─── DepositDialog ────────────────────────────────────────────────────────────
 
-function DepositDialog({ open, onClose, year, month, p1Name, p2Name, editing, ownerUserId }: {
+function DepositDialog({ open, onClose, year, month, p1Name, p2Name, editing, ownerUserId, personSwapped }: {
   open: boolean; onClose: () => void
   year: number; month: number
   p1Name: string; p2Name: string
   editing: SharedDeposit | null
   ownerUserId?: string
+  personSwapped?: boolean
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -145,9 +154,11 @@ function DepositDialog({ open, onClose, year, month, p1Name, p2Name, editing, ow
     if (isNaN(amt) || amt <= 0) return
     startTransition(async () => {
       if (editing) {
-        await updateDeposit(editing.id, { person, amount: amt, note: note || undefined }, ownerUserId)
+        const savePerson = personSwapped ? (person === 1 ? 2 : 1) : person
+        await updateDeposit(editing.id, { person: savePerson, amount: amt, note: note || undefined }, ownerUserId)
       } else {
-        await createDeposit({ year, month, person, amount: amt, note: note || undefined }, ownerUserId)
+        const savePerson = personSwapped ? (person === 1 ? 2 : 1) : person
+        await createDeposit({ year, month, person: savePerson, amount: amt, note: note || undefined }, ownerUserId)
       }
       router.refresh(); onClose()
     })
@@ -274,6 +285,7 @@ export function CompartidoAnualView({
   isOwner = true,
   ownerName,
   sharedAccounts = [],
+  personSwapped = false,
 }: Props) {
   const router  = useRouter()
   const [, startTransition] = useTransition()
@@ -628,6 +640,7 @@ export function CompartidoAnualView({
             p2Name={p2Name}
             editing={expDialog.editing}
             ownerUserId={ownerUserId}
+            personSwapped={personSwapped}
           />
           <DepositDialog
             key={`dep-${depDialog.editing?.id ?? "new"}-${selectedMonth}`}
@@ -639,6 +652,7 @@ export function CompartidoAnualView({
             p2Name={p2Name}
             editing={depDialog.editing}
             ownerUserId={ownerUserId}
+            personSwapped={personSwapped}
           />
         </>
       )}

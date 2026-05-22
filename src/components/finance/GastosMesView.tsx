@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight, Plus, Trash2, Pencil } from "lucide-react"
 import {
-  SharedCategory, SharedDeposit, SharedExpense,
+  SharedCategory, SharedDeposit,
   SharedPayer, SharedPersonIncome, SharedYearConfig, SplitType,
 } from "@prisma/client"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -21,6 +21,10 @@ import {
   createDeposit, updateDeposit, deleteDeposit,
 } from "@/app/(dashboard)/gastos/actions"
 
+const SWAP_PAYER: Record<SharedPayer, SharedPayer> = {
+  ACCOUNT: "ACCOUNT", PERSON1: "PERSON2", PERSON2: "PERSON1",
+}
+
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 type Props = {
@@ -32,6 +36,8 @@ type Props = {
   expenses: ExpenseWithCategory[]
   deposits: SharedDeposit[]
   basePath?: string
+  ownerUserId?: string
+  personSwapped?: boolean
 }
 
 const PAYER_OPTIONS = (p1: string, p2: string) => [
@@ -85,13 +91,15 @@ function Row({ label, value, bold }: { label: string; value: number; bold?: bool
 
 function ExpenseDialog({
   open, onClose, year, month, categories, p1Name, p2Name,
-  editing,
+  editing, ownerUserId, personSwapped,
 }: {
   open: boolean; onClose: () => void
   year: number; month: number
   categories: SharedCategory[]
   p1Name: string; p2Name: string
   editing: ExpenseWithCategory | null
+  ownerUserId?: string
+  personSwapped?: boolean
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -113,9 +121,11 @@ function ExpenseDialog({
 
     startTransition(async () => {
       if (editing) {
-        await updateExpense(editing.id, { categoryId, amount: amt, paidBy, note: note || undefined })
+        const savePaidBy = personSwapped ? SWAP_PAYER[paidBy] : paidBy
+        await updateExpense(editing.id, { categoryId, amount: amt, paidBy: savePaidBy, note: note || undefined }, ownerUserId)
       } else {
-        await createExpense({ year, month, categoryId, amount: amt, paidBy, note: note || undefined })
+        const savePaidBy = personSwapped ? SWAP_PAYER[paidBy] : paidBy
+        await createExpense({ year, month, categoryId, amount: amt, paidBy: savePaidBy, note: note || undefined }, ownerUserId)
       }
       router.refresh()
       onClose()
@@ -209,12 +219,14 @@ function ExpenseDialog({
 // ─── Diálogo de aportación ────────────────────────────────────────────────────
 
 function DepositDialog({
-  open, onClose, year, month, p1Name, p2Name, editing,
+  open, onClose, year, month, p1Name, p2Name, editing, ownerUserId, personSwapped,
 }: {
   open: boolean; onClose: () => void
   year: number; month: number
   p1Name: string; p2Name: string
   editing: SharedDeposit | null
+  ownerUserId?: string
+  personSwapped?: boolean
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -230,9 +242,11 @@ function DepositDialog({
 
     startTransition(async () => {
       if (editing) {
-        await updateDeposit(editing.id, { person, amount: amt, note: note || undefined })
+        const savePerson = personSwapped ? (person === 1 ? 2 : 1) : person
+        await updateDeposit(editing.id, { person: savePerson, amount: amt, note: note || undefined }, ownerUserId)
       } else {
-        await createDeposit({ year, month, person, amount: amt, note: note || undefined })
+        const savePerson = personSwapped ? (person === 1 ? 2 : 1) : person
+        await createDeposit({ year, month, person: savePerson, amount: amt, note: note || undefined }, ownerUserId)
       }
       router.refresh()
       onClose()
@@ -328,6 +342,8 @@ function SectionHeader({ title, onAdd }: { title: string; onAdd: () => void }) {
 export function GastosMesView({
   year, month, yearConfig, personIncomes, categories, expenses, deposits,
   basePath = "/registro/gastos",
+  ownerUserId,
+  personSwapped = false,
 }: Props) {
   const p1Name = yearConfig?.person1Name ?? "Persona 1"
   const p2Name = yearConfig?.person2Name ?? "Persona 2"
@@ -353,8 +369,8 @@ export function GastosMesView({
 
   function handleDelete(id: string, type: "expense" | "deposit") {
     startTransition(async () => {
-      if (type === "expense") await deleteExpense(id)
-      else await deleteDeposit(id)
+      if (type === "expense") await deleteExpense(id, ownerUserId)
+      else await deleteDeposit(id, ownerUserId)
       router.refresh()
     })
   }
@@ -496,6 +512,8 @@ export function GastosMesView({
         p1Name={p1Name}
         p2Name={p2Name}
         editing={expenseDialog.editing}
+        ownerUserId={ownerUserId}
+        personSwapped={personSwapped}
       />
       <DepositDialog
         open={depositDialog.open}
@@ -505,6 +523,8 @@ export function GastosMesView({
         p1Name={p1Name}
         p2Name={p2Name}
         editing={depositDialog.editing}
+        ownerUserId={ownerUserId}
+        personSwapped={personSwapped}
       />
     </div>
   )

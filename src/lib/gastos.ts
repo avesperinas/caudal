@@ -2,7 +2,10 @@
  * gastos.ts — dominio de gastos comunes (pareja).
  */
 
-import { SharedCategory, SharedDeposit, SharedExpense, SharedPersonIncome, SplitType } from "@prisma/client"
+import {
+  SharedCategory, SharedDeposit, SharedExpense, SharedPayer,
+  SharedPersonIncome, SharedYearConfig, SplitType,
+} from "@prisma/client"
 
 export const MONTHS = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -41,6 +44,51 @@ export type MonthBalance = {
   deposits2:     number
   individual1:   number
   individual2:   number
+}
+
+// ─── Swap de personas (para colaboradores) ───────────────────────────────────
+
+const SWAP_PAYER: Record<SharedPayer, SharedPayer> = {
+  ACCOUNT: "ACCOUNT",
+  PERSON1: "PERSON2",
+  PERSON2: "PERSON1",
+}
+
+/**
+ * Intercambia Persona 1 ↔ Persona 2 en todos los datos compartidos.
+ * Así cada usuario se ve a sí mismo como "Persona 1".
+ */
+export function swapPersons<E extends { paidBy: SharedPayer }>(
+  yearConfig: SharedYearConfig | null,
+  personIncomes: SharedPersonIncome[],
+  expenses: E[],
+  deposits: SharedDeposit[],
+) {
+  const swappedConfig = yearConfig
+    ? { ...yearConfig, person1Name: yearConfig.person2Name, person2Name: yearConfig.person1Name }
+    : null
+
+  const swappedIncomes = personIncomes.map(i => ({
+    ...i,
+    person: i.person === 1 ? 2 : 1,
+  }))
+
+  const swappedExpenses = expenses.map(e => ({
+    ...e,
+    paidBy: SWAP_PAYER[e.paidBy],
+  }))
+
+  const swappedDeposits = deposits.map(d => ({
+    ...d,
+    person: d.person === 1 ? 2 : 1,
+  }))
+
+  return {
+    yearConfig: swappedConfig,
+    personIncomes: swappedIncomes,
+    expenses: swappedExpenses,
+    deposits: swappedDeposits,
+  }
 }
 
 // ─── Helpers de fecha ─────────────────────────────────────────────────────────
