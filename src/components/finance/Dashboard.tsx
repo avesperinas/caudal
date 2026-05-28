@@ -1,11 +1,9 @@
 "use client"
 
-import { useMemo } from "react"
-import { TrendingUp, TrendingDown, Minus } from "lucide-react"
-import { ProductType } from "@prisma/client"
+import { useMemo, useState, useRef, useEffect } from "react"
+import { TrendingUp, TrendingDown, Minus, ChevronDown, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { tx } from "@/lib/styles"
-import { PRODUCT_TYPE_LABELS } from "@/lib/products"
 
 // ─── Periodos compartidos ────────────────────────────────────────────────────
 
@@ -58,6 +56,97 @@ export function FilterChip({
     >
       {children}
     </button>
+  )
+}
+
+// ─── Multi-select filter ──────────────────────────────────────────────────────
+
+export function MultiSelectFilter({
+  placeholder, options, selected, onChange,
+}: {
+  placeholder: string
+  options: { value: string; label: string }[]
+  selected: Set<string>
+  onChange: (v: Set<string>) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", onDown)
+    return () => document.removeEventListener("mousedown", onDown)
+  }, [])
+
+  const noneSelected = selected.size === 0
+  const label = noneSelected
+    ? placeholder
+    : selected.size === 1
+    ? (options.find((o) => selected.has(o.value))?.label ?? placeholder)
+    : `${selected.size} seleccionados`
+
+  function toggle(v: string) {
+    const next = new Set(selected)
+    if (next.has(v)) next.delete(v)
+    else next.add(v)
+    onChange(next)
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((p) => !p)}
+        className={cn(
+          "flex items-center gap-1.5 rounded-lg border bg-background px-3 py-1.5 text-xs font-medium outline-none focus:ring-2 focus:ring-ring sm:text-sm",
+          noneSelected ? "border-input" : "border-primary bg-primary/5 text-primary",
+        )}
+      >
+        <span className="max-w-[140px] truncate">{label}</span>
+        <ChevronDown className="size-3 shrink-0 opacity-60" />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-20 mt-1 max-h-60 min-w-[180px] overflow-y-auto rounded-lg border border-border bg-popover py-1 shadow-md">
+          <button
+            type="button"
+            onClick={() => onChange(new Set())}
+            className={cn(
+              "flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/60",
+              noneSelected && "font-medium",
+            )}
+          >
+            <span className={cn(
+              "flex size-3.5 shrink-0 items-center justify-center rounded border",
+              noneSelected ? "border-primary bg-primary" : "border-border",
+            )}>
+              {noneSelected && <Check className="size-2.5 text-primary-foreground" />}
+            </span>
+            Todos
+          </button>
+          {options.map((o) => {
+            const checked = selected.has(o.value)
+            return (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => toggle(o.value)}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/60"
+              >
+                <span className={cn(
+                  "flex size-3.5 shrink-0 items-center justify-center rounded border",
+                  checked ? "border-primary bg-primary" : "border-border",
+                )}>
+                  {checked && <Check className="size-2.5 text-primary-foreground" />}
+                </span>
+                <span className="truncate">{o.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -148,84 +237,6 @@ export function ChartTooltipBox({
   )
 }
 
-// ─── Filtro Producto / Categoría ─────────────────────────────────────────────
-
-export type ProductFilter = "__all__" | `cat:${string}` | `prod:${string}`
-
-type FilterableProduct = {
-  id: string
-  name: string
-  type: string
-  entity: { name: string }
-}
-
-export function ProductCategoryFilter<P extends FilterableProduct>({
-  value, onChange, products,
-}: {
-  value: ProductFilter
-  onChange: (v: ProductFilter) => void
-  products: P[]
-}) {
-  const types = useMemo(() => {
-    const set = new Set<string>()
-    for (const p of products) set.add(p.type)
-    return Array.from(set).sort((a, b) => {
-      const la = PRODUCT_TYPE_LABELS[a as ProductType] ?? a
-      const lb = PRODUCT_TYPE_LABELS[b as ProductType] ?? b
-      return la.localeCompare(lb)
-    })
-  }, [products])
-
-  const sortedProducts = useMemo(() => [...products].sort((a, b) =>
-    a.entity.name.localeCompare(b.entity.name) || a.name.localeCompare(b.name),
-  ), [products])
-
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value as ProductFilter)}
-      className="min-w-0 max-w-full truncate rounded-lg border border-input bg-background px-3 py-1.5 text-xs font-medium outline-none focus:ring-2 focus:ring-ring sm:text-sm"
-      aria-label="Filtrar por producto o categoría"
-    >
-      <option value="__all__">Todos los productos</option>
-      {types.length > 0 && (
-        <optgroup label="Categorías">
-          {types.map((t) => (
-            <option key={`cat:${t}`} value={`cat:${t}`}>
-              {PRODUCT_TYPE_LABELS[t as ProductType] ?? t}
-            </option>
-          ))}
-        </optgroup>
-      )}
-      {sortedProducts.length > 0 && (
-        <optgroup label="Productos">
-          {sortedProducts.map((p) => (
-            <option key={`prod:${p.id}`} value={`prod:${p.id}`}>
-              {p.entity.name} · {p.name}
-            </option>
-          ))}
-        </optgroup>
-      )}
-    </select>
-  )
-}
-
-export function applyProductFilter<P extends { id: string; type: string }>(
-  items: P[],
-  filter: ProductFilter,
-): P[] {
-  if (filter === "__all__") return items
-  if (filter.startsWith("cat:")) {
-    const t = filter.slice(4)
-    return items.filter((p) => p.type === t)
-  }
-  if (filter.startsWith("prod:")) {
-    const id = filter.slice(5)
-    return items.filter((p) => p.id === id)
-  }
-  return items
-}
-
 // ─── Constantes de chart ─────────────────────────────────────────────────────
 
 export const CHART_TICK = "#94a3b8"
@@ -241,3 +252,4 @@ export const CHART_COLORS = {
   primary:   "#6366f1",
   secondary: "#94a3b8",
 } as const
+

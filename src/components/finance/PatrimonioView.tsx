@@ -19,7 +19,7 @@ import { EntityIcon } from "@/components/finance/EntityIcon"
 import {
   KpiCard, PeriodTabs, Period, DashboardBlock,
   ChartTooltipBox, CHART_TICK, CHART_GRID, CHART_COLORS,
-  ProductCategoryFilter, applyProductFilter, ProductFilter,
+  MultiSelectFilter,
 } from "@/components/finance/Dashboard"
 import { deleteSnapshotDate } from "@/app/(dashboard)/patrimonio/actions"
 import { toDateInput, PRODUCT_TYPE_LABELS } from "@/lib/products"
@@ -34,7 +34,7 @@ type Product = {
   name: string
   type: ProductType
   ownership: number
-  entity: { name: string; color: string; icon: string | null }
+  entity: { id: string; name: string; color: string; icon: string | null }
 }
 
 type SnapshotRow = {
@@ -324,9 +324,70 @@ export function PatrimonioView({ products, snapshots }: Props) {
   const [isPending, startTransition] = useTransition()
   const [deletingDate, setDeletingDate] = useState<string | null>(null)
   const [period, setPeriod] = useState<Period>("todo")
-  const [filter, setFilter] = useState<ProductFilter>("__all__")
+  const [selEntities, setSelEntities] = useState(new Set<string>())
+  const [selTipos, setSelTipos]       = useState(new Set<string>())
+  const [selProducts, setSelProducts] = useState(new Set<string>())
 
-  const filteredProducts = useMemo(() => applyProductFilter(products, filter), [products, filter])
+  // Cascaded filtering
+  const afterEntity = useMemo(
+    () => selEntities.size === 0 ? products : products.filter(p => selEntities.has(p.entity.id)),
+    [products, selEntities],
+  )
+  const afterTipo = useMemo(
+    () => selTipos.size === 0 ? afterEntity : afterEntity.filter(p => selTipos.has(p.type)),
+    [afterEntity, selTipos],
+  )
+  const filteredProducts = useMemo(
+    () => selProducts.size === 0 ? afterTipo : afterTipo.filter(p => selProducts.has(p.id)),
+    [afterTipo, selProducts],
+  )
+
+  // Available options
+  const optEntities = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const p of products) map.set(p.entity.id, p.entity.name)
+    return [...map.entries()]
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([value, label]) => ({ value, label }))
+  }, [products])
+
+  const optTipos = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of afterEntity) set.add(p.type)
+    return [...set]
+      .sort((a, b) => (PRODUCT_TYPE_LABELS[a as ProductType] ?? a).localeCompare(PRODUCT_TYPE_LABELS[b as ProductType] ?? b))
+      .map(t => ({ value: t, label: PRODUCT_TYPE_LABELS[t as ProductType] ?? t }))
+  }, [afterEntity])
+
+  const optProducts = useMemo(() =>
+    [...afterTipo]
+      .sort((a, b) => a.entity.name.localeCompare(b.entity.name) || a.name.localeCompare(b.name))
+      .map(p => ({ value: p.id, label: `${p.entity.name} · ${p.name}` })),
+    [afterTipo],
+  )
+
+  function handleEntityChange(v: Set<string>) {
+    setSelEntities(v)
+    const filtered = v.size === 0 ? products : products.filter(p => v.has(p.entity.id))
+    const validTipos = new Set<string>(filtered.map(p => p.type))
+    const newTipos = new Set([...selTipos].filter(t => validTipos.has(t)))
+    if (newTipos.size !== selTipos.size) {
+      setSelTipos(newTipos)
+      setSelProducts(new Set())
+      return
+    }
+    const afterT = newTipos.size === 0 ? filtered : filtered.filter(p => newTipos.has(p.type))
+    const validProds = new Set(afterT.map(p => p.id))
+    setSelProducts(new Set([...selProducts].filter(id => validProds.has(id))))
+  }
+
+  function handleTipoChange(v: Set<string>) {
+    setSelTipos(v)
+    const filtered = v.size === 0 ? afterEntity : afterEntity.filter(p => v.has(p.type))
+    const validProds = new Set(filtered.map(p => p.id))
+    setSelProducts(new Set([...selProducts].filter(id => validProds.has(id))))
+  }
+
   const filteredIds = useMemo(() => new Set(filteredProducts.map((p) => p.id)), [filteredProducts])
   const filteredSnapshots = useMemo(
     () => snapshots.filter((s) => filteredIds.has(s.productId)),
@@ -388,14 +449,33 @@ export function PatrimonioView({ products, snapshots }: Props) {
 
       {/* ── Filtros ── */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <ProductCategoryFilter value={filter} onChange={setFilter} products={products} />
+        <div className="flex flex-wrap gap-2">
+          <MultiSelectFilter
+            placeholder="Entidades"
+            options={optEntities}
+            selected={selEntities}
+            onChange={handleEntityChange}
+          />
+          <MultiSelectFilter
+            placeholder="Tipos"
+            options={optTipos}
+            selected={selTipos}
+            onChange={handleTipoChange}
+          />
+          <MultiSelectFilter
+            placeholder="Productos"
+            options={optProducts}
+            selected={selProducts}
+            onChange={setSelProducts}
+          />
+        </div>
         <PeriodTabs value={period} onChange={setPeriod} />
       </div>
 
       {timeline.length === 0 && (
         <div className="rounded-xl border border-dashed border-border bg-card/50 p-8 text-center">
           <p className="text-sm font-medium">Sin datos para este filtro</p>
-          <p className={cn(tx.caption, "mt-1")}>Prueba con otra categoría o producto.</p>
+          <p className={cn(tx.caption, "mt-1")}>Prueba con otra combinación de filtros.</p>
         </div>
       )}
 

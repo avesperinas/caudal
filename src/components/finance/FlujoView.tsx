@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   KpiCard, PeriodTabs, Period, DashboardBlock,
   ChartTooltipBox, CHART_TICK, CHART_GRID, CHART_COLORS,
+  MultiSelectFilter,
 } from "@/components/finance/Dashboard"
 import { tx } from "@/lib/styles"
 import { cn } from "@/lib/utils"
@@ -89,7 +90,19 @@ function RateTooltip({ active, payload, label }: TooltipBoxProps) {
 
 export function FlujoView({ months }: { months: FlujoMonth[] }) {
   const [period, setPeriod] = useState<Period>("1a")
-  const filtered = useMemo(() => filterByPeriod(months, period), [months, period])
+  const [selYears, setSelYears] = useState(new Set<string>())
+
+  const optYears = useMemo(() => {
+    const set = new Set<number>()
+    for (const m of months) set.add(m.year)
+    return [...set].sort((a, b) => a - b).map(y => ({ value: String(y), label: String(y) }))
+  }, [months])
+
+  const byYear = useMemo(
+    () => selYears.size === 0 ? months : months.filter(m => selYears.has(String(m.year))),
+    [months, selYears],
+  )
+  const filtered = useMemo(() => filterByPeriod(byYear, period), [byYear, period])
 
   // ── KPIs del período ──
   const totals = useMemo(() => {
@@ -125,8 +138,13 @@ export function FlujoView({ months }: { months: FlujoMonth[] }) {
     <div className="space-y-5">
 
       {/* ── Filtros ── */}
-      <div className="flex items-center justify-between">
-        <p className={tx.secondary}>Período</p>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <MultiSelectFilter
+          placeholder="Años"
+          options={optYears}
+          selected={selYears}
+          onChange={setSelYears}
+        />
         <PeriodTabs value={period} onChange={setPeriod} />
       </div>
 

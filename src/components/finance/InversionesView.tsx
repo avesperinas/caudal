@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   KpiCard, PeriodTabs, Period, DashboardBlock,
   ChartTooltipBox, CHART_TICK, CHART_GRID, CHART_COLORS,
-  ProductCategoryFilter, applyProductFilter, ProductFilter,
+  MultiSelectFilter,
 } from "@/components/finance/Dashboard"
 import { tx } from "@/lib/styles"
 import { cn } from "@/lib/utils"
@@ -131,12 +131,38 @@ function calcMetricas(p: ProductoInversion): Metricas {
   return { valorActual, valorTotal, capitalInvertido, capitalRetirado, capitalNeto, gananciaAbsoluta, rentabilidad, tir, ultimaFecha, hasData }
 }
 
+function calcPortfolioTir(products: ProductoInversion[]): number | null {
+  const cfs: { date: Date; amount: number }[] = []
+  let lastDate: Date | null = null
+  let totalValor = 0
+
+  for (const p of products) {
+    const pct = p.ownership / 100
+    for (const a of p.aportaciones.filter(x => x.madeByMe)) {
+      cfs.push({
+        date: a.date ? new Date(a.date) : new Date(a.year, a.month - 1, 1),
+        amount: -a.amount,
+      })
+    }
+    if (p.snapshots.length > 0) {
+      const last = p.snapshots[p.snapshots.length - 1]
+      const d = new Date(last.date)
+      if (!lastDate || d > lastDate) lastDate = d
+      totalValor += last.value * pct
+    }
+  }
+
+  if (cfs.length === 0 || !lastDate || totalValor <= 0) return null
+  cfs.push({ date: lastDate, amount: totalValor })
+  cfs.sort((a, b) => a.date.getTime() - b.date.getTime())
+  return xirr(cfs)
+}
+
 // ─── Serie agregada cartera ──────────────────────────────────────────────────
 
 type PortfolioPoint = { dateMs: number; label: string; valor: number; coste: number }
 
 function buildPortfolioSeries(products: ProductoInversion[]): PortfolioPoint[] {
-  // Recolecta todas las fechas únicas (snapshots + aportaciones)
   const dates = new Set<number>()
   for (const p of products) {
     for (const s of p.snapshots) dates.add(new Date(s.date).getTime())
@@ -148,7 +174,6 @@ function buildPortfolioSeries(products: ProductoInversion[]): PortfolioPoint[] {
   const sortedMs = [...dates].sort((a, b) => a - b)
   if (sortedMs.length === 0) return []
 
-  // Para cada fecha, suma valor (último snapshot ≤ fecha × ownership) y coste base
   return sortedMs.map((ms) => {
     let valor = 0
     let coste = 0
@@ -377,12 +402,71 @@ function ProductsTableDialog({ products }: { products: ProductoInversion[] }) {
 
 export function InversionesView({ products }: { products: ProductoInversion[] }) {
   const [period, setPeriod] = useState<Period>("1a")
-  const [filter, setFilter] = useState<ProductFilter>("__all__")
+  const [selEntities, setSelEntities] = useState(new Set<string>())
+  const [selTipos, setSelTipos]       = useState(new Set<string>())
+  const [selProducts, setSelProducts] = useState(new Set<string>())
 
-  const productosFiltrados = useMemo(
-    () => applyProductFilter(products, filter),
-    [products, filter],
+  // Cascaded filtering
+  const afterEntity = useMemo(
+    () => selEntities.size === 0 ? products : products.filter(p => selEntities.has(p.entity.id)),
+    [products, selEntities],
   )
+  const afterTipo = useMemo(
+    () => selTipos.size === 0 ? afterEntity : afterEntity.filter(p => selTipos.has(p.type)),
+    [afterEntity, selTipos],
+  )
+  const productosFiltrados = useMemo(
+    () => selProducts.size === 0 ? afterTipo : afterTipo.filter(p => selProducts.has(p.id)),
+    [afterTipo, selProducts],
+  )
+
+  // Available options (coherent dropdowns)
+  const optEntities = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const p of products) map.set(p.entity.id, p.entity.name)
+    return [...map.entries()]
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([value, label]) => ({ value, label }))
+  }, [products])
+
+  const optTipos = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of afterEntity) set.add(p.type)
+    return [...set]
+      .sort((a, b) => (TIPO_LABEL[a] ?? a).localeCompare(TIPO_LABEL[b] ?? b))
+      .map(t => ({ value: t, label: TIPO_LABEL[t] ?? t }))
+  }, [afterEntity])
+
+  const optProducts = useMemo(() =>
+    [...afterTipo]
+      .sort((a, b) => a.entity.name.localeCompare(b.entity.name) || a.name.localeCompare(b.name))
+      .map(p => ({ value: p.id, label: `${p.entity.name} · ${p.name}` })),
+    [afterTipo],
+  )
+
+  // Cascade resets on entity change
+  function handleEntityChange(v: Set<string>) {
+    setSelEntities(v)
+    const filtered = v.size === 0 ? products : products.filter(p => v.has(p.entity.id))
+    const validTipos = new Set(filtered.map(p => p.type))
+    const newTipos = new Set([...selTipos].filter(t => validTipos.has(t)))
+    if (newTipos.size !== selTipos.size) {
+      setSelTipos(newTipos)
+      setSelProducts(new Set())
+      return
+    }
+    const afterT = newTipos.size === 0 ? filtered : filtered.filter(p => newTipos.has(p.type))
+    const validProds = new Set(afterT.map(p => p.id))
+    setSelProducts(new Set([...selProducts].filter(id => validProds.has(id))))
+  }
+
+  // Cascade resets on tipo change
+  function handleTipoChange(v: Set<string>) {
+    setSelTipos(v)
+    const filtered = v.size === 0 ? afterEntity : afterEntity.filter(p => v.has(p.type))
+    const validProds = new Set(filtered.map(p => p.id))
+    setSelProducts(new Set([...selProducts].filter(id => validProds.has(id))))
+  }
 
   // ── Totales actuales ──
   const totales = useMemo(() => {
@@ -396,6 +480,8 @@ export function InversionesView({ products }: { products: ProductoInversion[] })
 
   const rentabilidadTotal = totales.capital > 0 ? (totales.ganancia / totales.capital) * 100 : 0
   const positivo = totales.ganancia >= 0
+
+  const tirAnual = useMemo(() => calcPortfolioTir(productosFiltrados), [productosFiltrados])
 
   // ── Serie agregada ──
   const series = useMemo(() => buildPortfolioSeries(productosFiltrados), [productosFiltrados])
@@ -437,14 +523,37 @@ export function InversionesView({ products }: { products: ProductoInversion[] })
 
       {/* ── Filtros ── */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <ProductCategoryFilter value={filter} onChange={setFilter} products={products} />
+        <div className="flex flex-wrap gap-2">
+          <MultiSelectFilter
+            placeholder="Entidades"
+            options={optEntities}
+            selected={selEntities}
+            onChange={handleEntityChange}
+          />
+          <MultiSelectFilter
+            placeholder="Tipos"
+            options={optTipos}
+            selected={selTipos}
+            onChange={handleTipoChange}
+          />
+          <MultiSelectFilter
+            placeholder="Productos"
+            options={optProducts}
+            selected={selProducts}
+            onChange={setSelProducts}
+          />
+        </div>
         <PeriodTabs value={period} onChange={setPeriod} />
       </div>
 
       {/* ── KPIs ── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <KpiCard label="Valor actual"    value={formatAmountAbs(totales.valor)} />
-        <KpiCard label="Capital neto"    value={formatAmountAbs(totales.capital)} />
+        <KpiCard label="Valor actual" value={formatAmountAbs(totales.valor)} />
+        <KpiCard
+          label="TIR anual"
+          value={tirAnual != null ? formatPctSigned(tirAnual * 100) : "—"}
+          accent={tirAnual != null ? (tirAnual >= 0 ? "positive" : "negative") : undefined}
+        />
         <KpiCard
           label="Ganancia"
           value={formatAmount(totales.ganancia)}
