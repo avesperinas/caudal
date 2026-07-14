@@ -1,0 +1,6 @@
+# Shell scripts and the cron table run inside Linux containers: they must keep
+# LF endings regardless of the committer's platform or core.autocrlf setting.
+# Without this, `git archive` on a Windows checkout emits CRLF and the backup
+# container fails with `exec /entrypoint.sh: no such file or directory`.
+*.sh text eol=lf
+scripts/backup/crontab text eol=lf
