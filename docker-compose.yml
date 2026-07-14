@@ -3,15 +3,13 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: finances
-      POSTGRES_PASSWORD: finances_dev
-      POSTGRES_DB: my_finances
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-finances}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finances_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-my_finances}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U finances -d my_finances"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finances} -d ${POSTGRES_DB:-my_finances}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -20,12 +18,13 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     env_file:
       - .env.local
     environment:
-      DATABASE_URL: postgresql://finances:finances_dev@postgres:5432/my_finances
-      AUTH_URL: http://localhost:3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-finances}:${POSTGRES_PASSWORD:-finances_dev}@postgres:5432/${POSTGRES_DB:-my_finances}
+      AUTH_URL: ${AUTH_URL:-http://localhost:3000}
+      AUTH_TRUST_HOST: ${AUTH_TRUST_HOST:-false}
     depends_on:
       postgres:
         condition: service_healthy
@@ -37,14 +36,22 @@ services:
       - .env.local
     environment:
       POSTGRES_HOST: postgres
-      POSTGRES_USER: finances
-      POSTGRES_PASSWORD: finances_dev
-      POSTGRES_DB: my_finances
+      POSTGRES_USER: ${POSTGRES_USER:-finances}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finances_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-my_finances}
     volumes:
       - backups:/backups
     depends_on:
       postgres:
         condition: service_healthy
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    profiles: ["prod"]
+    depends_on:
+      - app
 
 volumes:
   postgres_data:
