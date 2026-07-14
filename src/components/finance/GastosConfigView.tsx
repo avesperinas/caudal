@@ -10,6 +10,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import { tx } from "@/lib/styles"
+import { useConfirmDelete } from "@/components/ui/confirm-delete"
 import { formatAmountAbs } from "@/lib/format"
 import { SPLIT_LABELS, getAnnualIncome } from "@/lib/gastos"
 import {
@@ -229,15 +230,18 @@ function PersonIncomeSection({
   const totalExtra = incomes.reduce((s, i) => s + i.extra, 0)
   const annualIncome = getAnnualIncome(incomes, person, year)
 
+  const { confirmDelete, confirmDialog } = useConfirmDelete()
+
   function handleDelete(id: string) {
-    startTransition(async () => {
+    confirmDelete(() => startTransition(async () => {
       await deletePersonIncome(id)
       router.refresh()
-    })
+    }))
   }
 
   return (
     <div className="space-y-3">
+      {confirmDialog}
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium">{personName}</p>
@@ -346,15 +350,18 @@ export function GastosConfigView({ year, yearConfig, categories, personIncomes, 
     })
   }
 
+  const { confirmDelete, confirmDialog } = useConfirmDelete({ title: "¿Eliminar la categoría?" })
+
   function handleDeleteCategory(id: string) {
-    startTransition(async () => {
+    confirmDelete(() => startTransition(async () => {
       await deleteCategory(id)
       router.refresh()
-    })
+    }))
   }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-4 md:p-6">
+      {confirmDialog}
       {/* Header */}
       <div className="space-y-1">
         {/* Nivel raíz */}

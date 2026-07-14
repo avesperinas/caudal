@@ -10,7 +10,8 @@ import {
 } from "@prisma/client"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { tx } from "@/lib/styles"
+import { tx, interactive } from "@/lib/styles"
+import { useConfirmDelete } from "@/components/ui/confirm-delete"
 import { formatAmountAbs } from "@/lib/format"
 import {
   MONTHS, SPLIT_LABELS, calcMonthBalance,
@@ -335,15 +336,18 @@ export function CompartidoAnualView({
   // Sufijo de owner para links de año (colaborador)
   const ownerSuffix = !isOwner && ownerUserId ? `?owner=${ownerUserId}` : ""
 
+  const { confirmDelete, confirmDialog } = useConfirmDelete()
+
   function handleDeleteExpense(id: string) {
-    startTransition(async () => { await deleteExpense(id, ownerUserId); router.refresh() })
+    confirmDelete(() => startTransition(async () => { await deleteExpense(id, ownerUserId); router.refresh() }))
   }
   function handleDeleteDeposit(id: string) {
-    startTransition(async () => { await deleteDeposit(id, ownerUserId); router.refresh() })
+    confirmDelete(() => startTransition(async () => { await deleteDeposit(id, ownerUserId); router.refresh() }))
   }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-4 md:p-6">
+      {confirmDialog}
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
@@ -572,7 +576,7 @@ export function CompartidoAnualView({
                               </div>
                             </div>
                             <span className="tabular-nums text-sm font-medium shrink-0">{formatAmountAbs(exp.amount)}</span>
-                            <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                            <div className={interactive.rowActions}>
                               <button onClick={() => setExpDialog({ open: true, editing: exp })}
                                 className="rounded p-1 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                                 <Pencil className="size-3.5" />
@@ -606,7 +610,7 @@ export function CompartidoAnualView({
                             {dep.note && <p className={tx.caption}>{dep.note}</p>}
                           </div>
                           <span className="tabular-nums text-sm font-medium shrink-0">{formatAmountAbs(dep.amount)}</span>
-                          <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                          <div className={interactive.rowActions}>
                             <button onClick={() => setDepDialog({ open: true, editing: dep })}
                               className="rounded p-1 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                               <Pencil className="size-3.5" />

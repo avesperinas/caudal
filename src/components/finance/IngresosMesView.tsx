@@ -7,7 +7,8 @@ import { ChevronLeft, ChevronRight, Plus, Trash2, Pencil } from "lucide-react"
 import { PersonalCategory, PersonalTransaction } from "@prisma/client"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { tx } from "@/lib/styles"
+import { tx, interactive } from "@/lib/styles"
+import { useConfirmDelete } from "@/components/ui/confirm-delete"
 import { formatAmountAbs } from "@/lib/format"
 import { MONTHS } from "@/lib/gastos"
 import {
@@ -123,15 +124,18 @@ export function IngresosMesView({ year, month, categories, transactions }: Props
   const next = month === 12 ? { year: year + 1, month: 1  } : { year, month: month + 1 }
   const total = transactions.reduce((s, t) => s + t.amount, 0)
 
+  const { confirmDelete, confirmDialog } = useConfirmDelete()
+
   function handleDelete(id: string) {
-    startTransition(async () => {
+    confirmDelete(() => startTransition(async () => {
       await deletePersonalTransaction(id)
       router.refresh()
-    })
+    }))
   }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-4 md:p-6">
+      {confirmDialog}
       {/* Header */}
       <div className="space-y-1">
         <div className="flex items-center gap-1.5">
@@ -187,7 +191,7 @@ export function IngresosMesView({ year, month, categories, transactions }: Props
                   <span className="tabular-nums text-sm font-medium text-emerald-600 dark:text-emerald-400">
                     +{formatAmountAbs(t.amount)}
                   </span>
-                  <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className={interactive.rowActions}>
                     <button onClick={() => setDialog({ open: true, editing: t })}
                       className="rounded p-1 hover:bg-muted text-muted-foreground">
                       <Pencil className="size-3.5" />

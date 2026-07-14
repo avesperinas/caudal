@@ -8,6 +8,7 @@ import { PersonalCategory, PersonalCategoryType } from "@prisma/client"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import { tx } from "@/lib/styles"
+import { useConfirmDelete } from "@/components/ui/confirm-delete"
 import {
   createPersonalCategory, updatePersonalCategory,
   deletePersonalCategory, togglePersonalCategory,
@@ -103,12 +104,15 @@ function CategoryList({ categories, type }: { categories: PersonalCategory[]; ty
   function handleToggle(id: string, current: boolean) {
     startTransition(async () => { await togglePersonalCategory(id, !current); router.refresh() })
   }
+  const { confirmDelete, confirmDialog } = useConfirmDelete({ title: "¿Eliminar la categoría?" })
+
   function handleDelete(id: string) {
-    startTransition(async () => { await deletePersonalCategory(id); router.refresh() })
+    confirmDelete(() => startTransition(async () => { await deletePersonalCategory(id); router.refresh() }))
   }
 
   return (
     <>
+      {confirmDialog}
       <CardSection
         title={title}
         action={

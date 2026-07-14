@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation"
 import { Plus, Trash2, Pencil, Check, X } from "lucide-react"
 import { PersonalCategory } from "@prisma/client"
 import { cn } from "@/lib/utils"
-import { tx } from "@/lib/styles"
+import { tx, interactive } from "@/lib/styles"
+import { useConfirmDelete } from "@/components/ui/confirm-delete"
 import {
   createPersonalCategory,
   updatePersonalCategory,
@@ -74,7 +75,7 @@ function CatRow({
         </button>
       )}
 
-      <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+      <div className={interactive.rowActions}>
         <button onClick={onEdit} className="rounded p-1 hover:bg-muted text-muted-foreground">
           <Pencil className="size-3.5" />
         </button>
@@ -104,6 +105,7 @@ function CatSection({
   const [newName, setNewName] = useState("")
   const [editId, setEditId] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
+  const { confirmDelete, confirmDialog } = useConfirmDelete({ title: "¿Eliminar la categoría?" })
 
   function handleAdd(e: React.FormEvent) {
     e.preventDefault()
@@ -165,10 +167,10 @@ function CatSection({
                 router.refresh()
               })}
               onEdit={() => { setEditId(cat.id); setEditName(cat.name) }}
-              onDelete={() => startTransition(async () => {
+              onDelete={() => confirmDelete(() => startTransition(async () => {
                 await deletePersonalCategory(cat.id)
                 router.refresh()
-              })}
+              }))}
             />
           )
         ))}
@@ -199,6 +201,7 @@ function CatSection({
           </button>
         )}
       </div>
+      {confirmDialog}
     </div>
   )
 }

@@ -7,7 +7,8 @@ import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, Pencil, Trash2
 import { PersonalCategory, PersonalTransaction, Product, Entity, PersonalTransactionType } from "@prisma/client"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { tx } from "@/lib/styles"
+import { tx, interactive } from "@/lib/styles"
+import { useConfirmDelete } from "@/components/ui/confirm-delete"
 import { formatAmountAbs } from "@/lib/format"
 import { MONTHS } from "@/lib/gastos"
 import { createPersonalTransaction, updatePersonalTransaction, deletePersonalTransaction } from "@/app/(dashboard)/personal/actions"
@@ -129,7 +130,7 @@ function TxRow({ t, onEdit, onDelete }: { t: TransactionFull; onEdit: () => void
       <span className={cn("tabular-nums text-xs font-medium shrink-0", amountColor)}>
         {formatAmountAbs(t.amount)}
       </span>
-      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+      <div className={interactive.rowActions}>
         <button onClick={onEdit}
           className="rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
           <Pencil className="size-3" />
@@ -353,11 +354,13 @@ export function PersonalAnualView({ year, monthData, categories, products }: Pro
     })
   }
 
+  const { confirmDelete, confirmDialog } = useConfirmDelete()
+
   function handleDelete(id: string) {
-    startTransition(async () => {
+    confirmDelete(() => startTransition(async () => {
       await deletePersonalTransaction(id)
       router.refresh()
-    })
+    }))
   }
 
   const allTx         = monthData.flatMap(m => m.transactions)
@@ -368,6 +371,7 @@ export function PersonalAnualView({ year, monthData, categories, products }: Pro
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-4 md:p-6">
+      {confirmDialog}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

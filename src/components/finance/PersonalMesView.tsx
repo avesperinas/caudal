@@ -7,7 +7,8 @@ import { ChevronLeft, ChevronRight, Plus, Trash2, Pencil } from "lucide-react"
 import { PersonalCategory, PersonalTransaction, Product, Entity, PersonalTransactionType } from "@prisma/client"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { tx } from "@/lib/styles"
+import { tx, interactive } from "@/lib/styles"
+import { useConfirmDelete } from "@/components/ui/confirm-delete"
 import { formatAmountAbs } from "@/lib/format"
 import { MONTHS } from "@/lib/gastos"
 import { createPersonalTransaction, updatePersonalTransaction, deletePersonalTransaction } from "@/app/(dashboard)/personal/actions"
@@ -129,7 +130,7 @@ function TxRow({ t, onEdit, onDelete }: { t: TransactionFull; onEdit: () => void
       <span className={cn("tabular-nums text-sm font-medium shrink-0", amountColor)}>
         {formatAmountAbs(t.amount)}
       </span>
-      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+      <div className={interactive.rowActions}>
         <button onClick={onEdit}
           className="rounded p-1 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
           <Pencil className="size-3.5" />
@@ -281,15 +282,18 @@ export function PersonalMesView({ year, month, categories, transactions, product
   const expenses  = transactions.filter(t => t.type === "EXPENSE")
   const transfers = transactions.filter(t => t.type === "TRANSFER")
 
+  const { confirmDelete, confirmDialog } = useConfirmDelete()
+
   function handleDelete(id: string) {
-    startTransition(async () => {
+    confirmDelete(() => startTransition(async () => {
       await deletePersonalTransaction(id)
       router.refresh()
-    })
+    }))
   }
 
   return (
     <div className="mx-auto max-w-2xl space-y-5 p-4 md:p-6">
+      {confirmDialog}
       {/* Header */}
       <div>
         <div className="mb-1 flex items-center gap-1">

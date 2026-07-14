@@ -72,4 +72,6 @@ export const interactive = {
   listRow: "flex items-center justify-between py-3 border-b last:border-0",
   /** Icono de categoría / avatar placeholder */
   categoryIcon: "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-sm font-medium",
+  /** Acciones de fila (editar / borrar): visibles en móvil, al hover en desktop */
+  rowActions: "flex gap-0.5 shrink-0 transition-opacity sm:opacity-0 sm:group-hover:opacity-100",
 } as const;

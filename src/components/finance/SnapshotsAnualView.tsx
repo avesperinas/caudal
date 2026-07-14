@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { EntityIcon } from "@/components/finance/EntityIcon"
 import { cn } from "@/lib/utils"
 import { tx } from "@/lib/styles"
+import { useConfirmDelete } from "@/components/ui/confirm-delete"
 import { MONTHS } from "@/lib/gastos"
 import { formatAmountRound, formatAmountAbs, formatAmount, formatPctSigned } from "@/lib/format"
 import { toDateInput, PRODUCT_TYPE_LABELS } from "@/lib/products"
@@ -209,17 +210,22 @@ export function SnapshotsAnualView({ products, snapshots }: Props) {
 
   const mEntry = selectedMonth !== null ? monthMap.get(selectedMonth) : null
 
+  const { confirmDelete, confirmDialog } = useConfirmDelete({ title: "¿Eliminar el snapshot?" })
+
   function handleDelete(dateKey: string) {
-    setDeletingDate(dateKey)
-    startTransition(async () => {
-      await deleteSnapshotDate(dateKey)
-      router.refresh()
-      setDeletingDate(null)
+    confirmDelete(() => {
+      setDeletingDate(dateKey)
+      startTransition(async () => {
+        await deleteSnapshotDate(dateKey)
+        router.refresh()
+        setDeletingDate(null)
+      })
     })
   }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-4 md:p-6">
+      {confirmDialog}
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between">

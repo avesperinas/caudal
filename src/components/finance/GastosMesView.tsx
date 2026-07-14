@@ -10,7 +10,8 @@ import {
 } from "@prisma/client"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { tx } from "@/lib/styles"
+import { tx, interactive } from "@/lib/styles"
+import { useConfirmDelete } from "@/components/ui/confirm-delete"
 import { formatAmountAbs } from "@/lib/format"
 import {
   MONTHS, SPLIT_LABELS, calcMonthBalance,
@@ -367,16 +368,19 @@ export function GastosMesView({
   const prevMonth = month === 1  ? { year: year - 1, month: 12 } : { year, month: month - 1 }
   const nextMonth = month === 12 ? { year: year + 1, month: 1  } : { year, month: month + 1 }
 
+  const { confirmDelete, confirmDialog } = useConfirmDelete()
+
   function handleDelete(id: string, type: "expense" | "deposit") {
-    startTransition(async () => {
+    confirmDelete(() => startTransition(async () => {
       if (type === "expense") await deleteExpense(id, ownerUserId)
       else await deleteDeposit(id, ownerUserId)
       router.refresh()
-    })
+    }))
   }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-4 md:p-6">
+      {confirmDialog}
       {/* Header */}
       <div className="space-y-1">
         {/* Nivel año */}
@@ -487,7 +491,7 @@ export function GastosMesView({
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="tabular-nums text-sm font-medium">{formatAmountAbs(dep.amount)}</span>
-                  <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className={interactive.rowActions}>
                     <button onClick={() => setDepositDialog({ open: true, editing: dep })} className="rounded p-1 hover:bg-muted text-muted-foreground hover:text-foreground">
                       <Pencil className="size-3.5" />
                     </button>
@@ -560,7 +564,7 @@ function ExpenseRow({
       </div>
       <div className="flex items-center gap-3 shrink-0 ml-3">
         <span className="tabular-nums text-sm font-medium">{formatAmountAbs(expense.amount)}</span>
-        <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className={interactive.rowActions}>
           <button onClick={onEdit} className="rounded p-1 hover:bg-muted text-muted-foreground hover:text-foreground">
             <Pencil className="size-3.5" />
           </button>

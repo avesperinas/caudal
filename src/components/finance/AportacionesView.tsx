@@ -6,7 +6,8 @@ import { ChevronLeft, ChevronRight, Plus, Trash2, Pencil, AlertCircle } from "lu
 import { PersonalTransaction, Product, Entity } from "@prisma/client"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { tx } from "@/lib/styles"
+import { tx, interactive } from "@/lib/styles"
+import { useConfirmDelete } from "@/components/ui/confirm-delete"
 import { formatAmountAbs } from "@/lib/format"
 import { MONTHS } from "@/lib/gastos"
 import {
@@ -185,7 +186,7 @@ function AportacionRow({ a, onEdit, onDelete }: {
       )}>
         {formatAmountAbs(a.amount)}
       </span>
-      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+      <div className={interactive.rowActions}>
         <button onClick={onEdit} className="rounded p-1 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
           <Pencil className="size-3.5" />
         </button>
@@ -239,12 +240,15 @@ export function AportacionesView({ aportaciones, products }: Props) {
 
   const mData = selectedMonth !== null ? monthData.find(m => m.month === selectedMonth) : null
 
+  const { confirmDelete, confirmDialog } = useConfirmDelete()
+
   function handleDelete(id: string) {
-    startTransition(async () => { await deletePersonalTransaction(id); router.refresh() })
+    confirmDelete(() => startTransition(async () => { await deletePersonalTransaction(id); router.refresh() }))
   }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-4 md:p-6">
+      {confirmDialog}
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between">

@@ -7,7 +7,8 @@ import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2 } from "lucide-react"
 import { PersonalCategory, PersonalTransaction } from "@prisma/client"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { tx } from "@/lib/styles"
+import { tx, interactive } from "@/lib/styles"
+import { useConfirmDelete } from "@/components/ui/confirm-delete"
 import { formatAmountAbs } from "@/lib/format"
 import { MONTHS } from "@/lib/gastos"
 import {
@@ -80,7 +81,7 @@ function TxRow({ t, onEdit, onDelete }: { t: TxWithCat; onEdit: () => void; onDe
       <p className="flex-1 text-sm truncate">{t.category?.name ?? "Sin categoría"}</p>
       {t.note && <p className={cn(tx.caption, "truncate hidden sm:block max-w-[100px]")}>{t.note}</p>}
       <span className={cn("tabular-nums text-sm font-medium shrink-0", COLOR.text)}>{formatAmountAbs(t.amount)}</span>
-      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+      <div className={interactive.rowActions}>
         <button onClick={onEdit} className="rounded p-1 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
           <Pencil className="size-3.5" />
         </button>
@@ -174,12 +175,15 @@ export function GastosPersonalAnualView({ year, monthData, categories }: Props) 
     .filter(c => c.total > 0)
     .sort((a, b) => b.total - a.total)
 
+  const { confirmDelete, confirmDialog } = useConfirmDelete()
+
   function handleDelete(id: string) {
-    startTransition(async () => { await deletePersonalTransaction(id); router.refresh() })
+    confirmDelete(() => startTransition(async () => { await deletePersonalTransaction(id); router.refresh() }))
   }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-4 md:p-6">
+      {confirmDialog}
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between">

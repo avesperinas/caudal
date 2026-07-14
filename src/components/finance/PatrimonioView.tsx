@@ -24,6 +24,7 @@ import {
 import { deleteSnapshotDate } from "@/app/(dashboard)/patrimonio/actions"
 import { toDateInput, PRODUCT_TYPE_LABELS } from "@/lib/products"
 import { tx } from "@/lib/styles"
+import { useConfirmDelete } from "@/components/ui/confirm-delete"
 import { cn } from "@/lib/utils"
 import { formatAmountAbs, formatAmount, formatPct, formatPctSigned, formatNumber } from "@/lib/format"
 
@@ -413,11 +414,15 @@ export function PatrimonioView({ products, snapshots }: Props) {
   const maxVal = timeline.length > 0 ? Math.max(...timeline.map((p) => p.total)) : null
   const filtered = filterByPeriod(timeline, period)
 
+  const { confirmDelete, confirmDialog } = useConfirmDelete({ title: "¿Eliminar el snapshot?" })
+
   function handleDelete(date: string) {
-    setDeletingDate(date)
-    startTransition(async () => {
-      await deleteSnapshotDate(date)
-      setDeletingDate(null)
+    confirmDelete(() => {
+      setDeletingDate(date)
+      startTransition(async () => {
+        await deleteSnapshotDate(date)
+        setDeletingDate(null)
+      })
     })
   }
 
@@ -446,6 +451,7 @@ export function PatrimonioView({ products, snapshots }: Props) {
 
   return (
     <div className="space-y-5">
+      {confirmDialog}
 
       {/* ── Filtros ── */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
