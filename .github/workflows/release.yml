@@ -1,0 +1,29 @@
+name: release
+
+# Publicar una version:  git tag v1.3.0 && git push --tags
+# El resto (build de las dos imagenes, push a ghcr y despliegue) es automatico.
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  # Imagen principal. Es la que escribe la nueva version en infra.
+  app:
+    uses: avesperinas/workflows/.github/workflows/release.yml@main
+    with:
+      app_name: caudal
+    secrets:
+      infra_token: ${{ secrets.INFRA_TOKEN }}
+
+  # Sidecar de backups de Postgres. Comparte tag con la app, asi que el stack
+  # despliega siempre las dos juntas.
+  backup:
+    uses: avesperinas/workflows/.github/workflows/release.yml@main
+    with:
+      app_name: caudal
+      image_name: caudal-backup
+      context: scripts/backup
+      dockerfile: scripts/backup/Dockerfile
+      bump_infra: false
+    secrets:
+      infra_token: ${{ secrets.INFRA_TOKEN }}

@@ -1,3 +1,8 @@
+# SOLO PARA DESARROLLO LOCAL.
+#
+# En produccion esta app la despliega el reconciliador del server a partir de
+# avesperinas/infra (stacks/caudal): imagenes de ghcr por tag, sin puertos
+# publicados y con el tunel en el stack `edge`, no aqui.
 services:
   postgres:
     image: postgres:16-alpine
@@ -44,14 +49,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    restart: unless-stopped
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
-    profiles: ["prod"]
-    depends_on:
-      - app
 
 volumes:
   postgres_data:

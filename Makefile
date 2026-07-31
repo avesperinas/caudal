@@ -1,4 +1,4 @@
-.PHONY: up dev stop down prod prod-migrate prod-logs prod-stop help
+.PHONY: up dev stop down release help
 
 help:
 	@echo ""
@@ -8,11 +8,12 @@ help:
 	@echo "    make stop         — Parar contenedores sin eliminarlos (datos conservados)"
 	@echo "    make down         — Tirar contenedores sin borrar volumenes (datos conservados)"
 	@echo ""
-	@echo "  Produccion (servidor con Cloudflare Tunnel):"
-	@echo "    make prod         — Build y arranque de todo (app + postgres + backup + tunnel)"
-	@echo "    make prod-migrate — Aplicar migraciones (correr tras 'make prod')"
-	@echo "    make prod-logs    — Ver logs en streaming"
-	@echo "    make prod-stop    — Parar todos los servicios de produccion"
+	@echo "  Produccion:"
+	@echo "    make release V=v1.3.0  — Taggear y publicar. El resto es automatico."
+	@echo ""
+	@echo "    El despliegue lo hace GitHub Actions + el reconciliador del server."
+	@echo "    Las migraciones se aplican solas al arrancar el contenedor."
+	@echo "    Estado desplegado: github.com/avesperinas/infra"
 	@echo ""
 
 # Levanta todo desde cero: DB, deps, migraciones y servidor de desarrollo
@@ -38,14 +39,13 @@ down:
 
 # ─── Produccion ──────────────────────────────────────────────────────────────
 
-prod:
-	docker compose --env-file .env.local --profile prod up -d --build
-
-prod-migrate:
-	docker compose --env-file .env.local --profile prod exec app npx prisma migrate deploy
-
-prod-logs:
-	docker compose --env-file .env.local --profile prod logs -f
-
-prod-stop:
-	docker compose --env-file .env.local --profile prod down
+# Publica una version. GitHub Actions construye las imagenes y el server las
+# recoge solo en menos de un minuto.
+release:
+ifndef V
+	$(error Falta la version. Uso: make release V=v1.3.0)
+endif
+	@git diff --quiet || { echo "Hay cambios sin commitear."; exit 1; }
+	git tag $(V)
+	git push origin $(V)
+	@echo "Seguimiento: https://github.com/avesperinas/caudal/actions"

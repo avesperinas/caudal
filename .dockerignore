@@ -1,4 +1,23 @@
+.git
+.gitignore
+.github
+
 node_modules
 .next
-.git
-.env.local
+out
+
+# Secretos: nunca deben entrar en una capa de imagen.
+.env
+.env.*
+!.env.example
+
+# Desarrollo / documentacion
+Makefile
+README.md
+AGENTS.md
+CLAUDE.md
+docker-compose.yml
+**/*.log
+.vscode
+.idea
+.DS_Store
