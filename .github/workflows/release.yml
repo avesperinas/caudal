@@ -9,6 +9,12 @@ on:
 jobs:
   # Imagen principal. Es la que escribe la nueva version en infra.
   app:
+    # Un workflow reutilizable no puede pedir mas permisos de los que le concede
+    # quien lo llama, y el token de este repo es de solo lectura por defecto.
+    # Sin este bloque, el run falla antes de arrancar (startup_failure).
+    permissions:
+      contents: read
+      packages: write
     uses: avesperinas/workflows/.github/workflows/release.yml@main
     with:
       app_name: caudal
@@ -18,6 +24,9 @@ jobs:
   # Sidecar de backups de Postgres. Comparte tag con la app, asi que el stack
   # despliega siempre las dos juntas.
   backup:
+    permissions:
+      contents: read
+      packages: write
     uses: avesperinas/workflows/.github/workflows/release.yml@main
     with:
       app_name: caudal
