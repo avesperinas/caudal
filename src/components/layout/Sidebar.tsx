@@ -16,7 +16,7 @@ type User = {
   image?: string | null
 }
 
-export function Sidebar({ user }: { user: User }) {
+export function Sidebar({ user, version }: { user: User; version: string }) {
   const [collapsed, setCollapsed] = useState(false)
   const [mounted, setMounted] = useState(false)
 
@@ -58,6 +58,13 @@ export function Sidebar({ user }: { user: User }) {
         {/* Navegación */}
         <div className="flex-1 overflow-y-auto py-3">
           <SidebarNav />
+        </div>
+
+        {/* Versión desplegada, pegada al separador de abajo */}
+        <div className="px-5 pb-2">
+          <span className={cn(tx.caption, "whitespace-nowrap tabular-nums")}>
+            {version}
+          </span>
         </div>
 
         {/* Usuario + cerrar sesión */}
