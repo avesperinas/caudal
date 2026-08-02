@@ -13,12 +13,11 @@ export async function GET() {
     await prisma.$queryRaw`SELECT 1`
     return NextResponse.json({ status: "ok" })
   } catch (error) {
-    return NextResponse.json(
-      {
-        status: "error",
-        detail: error instanceof Error ? error.message : String(error),
-      },
-      { status: 503 },
-    )
+    // La ruta es publica (no pasa por el middleware de auth, para que el
+    // healthcheck del contenedor pueda consultarla), asi que el detalle del
+    // error se queda en los logs: devolverlo filtraria internos de Prisma y de
+    // la base de datos a cualquiera que la consulte desde internet.
+    console.error("[health] la base de datos no responde:", error)
+    return NextResponse.json({ status: "error" }, { status: 503 })
   }
 }
