@@ -52,6 +52,19 @@ function pctSafe(num: number, den: number): number {
   return (num / den) * 100
 }
 
+/**
+ * Tasa de ahorro en %, acotada a [0, 100].
+ *
+ * Un mes sin ingresos reales (0, o el céntimo simbólico que se usa para
+ * marcarlo) dispara el cociente a millones de %: reventaba la escala del
+ * chart de tasas y dejaba planos todos los demás meses. En ese extremo se
+ * ahorró todo lo que entró, así que la tasa es del 100%.
+ */
+function savingsRate(saved: number, income: number): number {
+  if (income <= 0) return saved > 0 ? 100 : 0
+  return Math.min(100, Math.max(0, (saved / income) * 100))
+}
+
 // ─── Tooltips ─────────────────────────────────────────────────────────────────
 
 function FlowTooltip({ active, payload, label }: TooltipBoxProps) {
@@ -120,16 +133,16 @@ export function FlujoView({ months }: { months: FlujoMonth[] }) {
   const n = filtered.length || 1
   const ingresoMedio = totals.ingresos / n
   const gastoMedio   = totals.gastos / n
-  const tasaAhorro   = pctSafe(totals.aportacionesFinancieras, totals.ingresos)
-  const tasaAmpliada = pctSafe(totals.ampliadas, totals.ingresos)
+  const tasaAhorro   = savingsRate(totals.aportacionesFinancieras, totals.ingresos)
+  const tasaAmpliada = savingsRate(totals.ampliadas, totals.ingresos)
 
   // ── Datos de chart ──
   const chartData = useMemo(() => filtered.map((m) => ({
     label: monthLabel(m, true),
     ingresos: Math.round(m.ingresos),
     gastos: Math.round(m.gastosPersonales + m.gastosCompartidos),
-    tasaFinanciera: Number(pctSafe(m.aportacionesFinancieras, m.ingresos).toFixed(1)),
-    tasaAmpliada: Number(pctSafe(m.aportacionesFinancieras + m.gastosViviendaYAmpliados, m.ingresos).toFixed(1)),
+    tasaFinanciera: Number(savingsRate(m.aportacionesFinancieras, m.ingresos).toFixed(1)),
+    tasaAmpliada: Number(savingsRate(m.aportacionesFinancieras + m.gastosViviendaYAmpliados, m.ingresos).toFixed(1)),
   })), [filtered])
 
   const tickInterval = chartData.length > 18 ? 3 : chartData.length > 12 ? 2 : 0
@@ -251,8 +264,8 @@ function FlujoTableDialog({ months }: { months: FlujoMonth[] }) {
             </thead>
             <tbody className="divide-y divide-border/60">
               {rows.map((m) => {
-                const tf = pctSafe(m.aportacionesFinancieras, m.ingresos)
-                const ta = pctSafe(m.aportacionesFinancieras + m.gastosViviendaYAmpliados, m.ingresos)
+                const tf = savingsRate(m.aportacionesFinancieras, m.ingresos)
+                const ta = savingsRate(m.aportacionesFinancieras + m.gastosViviendaYAmpliados, m.ingresos)
                 return (
                   <tr key={`${m.year}-${m.month}`} className="hover:bg-muted/30">
                     <td className="px-2 py-1.5 font-medium">{monthLabel(m)}</td>
