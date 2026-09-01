@@ -2,7 +2,7 @@ import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { FlujoView, FlujoMonth } from "@/components/finance/FlujoView"
-import { getRatio } from "@/lib/gastos"
+import { getAnnualRatio } from "@/lib/gastos"
 import { tx } from "@/lib/styles"
 
 export default async function FlujoPage() {
@@ -77,7 +77,7 @@ export default async function FlujoPage() {
     const [yStr, mStr] = k.split("-")
     const y = parseInt(yStr), m = parseInt(mStr)
     const row = touch(y, m)
-    const { ratio1 } = getRatio(sharedIncomes, y, m)
+    const { ratio1 } = getAnnualRatio(sharedIncomes, y)
     for (const e of list) {
       const r = e.splitType === "FIFTY_FIFTY" ? 0.5 : ratio1
       row.gastosCompartidos += e.amount * r

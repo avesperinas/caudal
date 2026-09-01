@@ -250,20 +250,29 @@ function AnnualBalanceCard({ name, pct, contribution, obligation, balance, settl
   )
 }
 
-// ─── Celda de variación anual ─────────────────────────────────────────────────
+// ─── Medias del resumen anual ─────────────────────────────────────────────────
 
-function ChangeCell({ pct }: { pct: number | null }) {
-  if (pct === null) return <span className={tx.caption}>—</span>
-  return (
-    <span className={cn(
-      pct > 0 ? "text-rose-600 dark:text-rose-400"
-        : pct < 0 ? "text-emerald-600 dark:text-emerald-400"
-        : "text-muted-foreground",
-    )}>
-      {formatPctSigned(pct, 1)}
-    </span>
-  )
+/** Meses ya cerrados del año: 12 si ya pasó, los transcurridos si es el año en curso. */
+function completedMonths(year: number, now: Date): number {
+  if (year < now.getFullYear()) return 12
+  if (year > now.getFullYear()) return 0
+  return now.getMonth()   // 0-based: en septiembre da 8, es decir enero-agosto
 }
+
+/** Media mensual sobre meses cerrados; null si el año todavía no tiene ninguno. */
+function monthlyAvg(list: { month: number; amount: number }[], months: number): number | null {
+  if (months <= 0) return null
+  return list.filter(e => e.month <= months).reduce((s, e) => s + e.amount, 0) / months
+}
+
+/** Variación entre dos medias; null si falta alguna o no hay base con la que comparar. */
+function changePct(avg: number | null, prevAvg: number | null): number | null {
+  if (avg === null || prevAvg === null || prevAvg === 0) return null
+  return (avg - prevAvg) / prevAvg * 100
+}
+
+const avgLabel    = (v: number | null) => v === null ? "—" : formatAmountAbs(v)
+const changeLabel = (v: number | null) => v === null ? "—" : formatPctSigned(v, 1)
 
 // ─── BalanceCard de mes ───────────────────────────────────────────────────────
 
@@ -319,7 +328,7 @@ export function CompartidoAnualView({
   const p2Name  = yearConfig?.person2Name ?? "Persona 2"
   const settled = yearConfig?.settled ?? false
 
-  const { ratio1: incomeRatio1, ratio2: incomeRatio2 } = getAnnualRatio(personIncomes, year)
+  const { ratio1, ratio2 } = getAnnualRatio(personIncomes, year)
 
   const now  = new Date()
   const isCY = now.getFullYear() === year
@@ -329,7 +338,7 @@ export function CompartidoAnualView({
     const month    = i + 1
     const mExp     = expenses.filter(e => e.month === month)
     const mDep     = deposits.filter(d => d.month === month)
-    const balance  = calcMonthBalance(mExp, mDep, personIncomes, year, month)
+    const balance  = calcMonthBalance(mExp, mDep, personIncomes, year)
     return { month, expenses: mExp, deposits: mDep, balance, hasData: mExp.length > 0 || mDep.length > 0 }
   })
 
@@ -345,41 +354,25 @@ export function CompartidoAnualView({
     { obligation1: 0, obligation2: 0, contribution1: 0, contribution2: 0, balance1: 0, balance2: 0 },
   )
 
-  // % de reparto realmente aplicado: los gastos 50/50 lo acercan al 50 %, así que
-  // no tiene por qué coincidir con el reparto por ingresos. Sin gastos aún, se cae a este.
-  const totalObligation = annualBalance.obligation1 + annualBalance.obligation2
-  const share1 = totalObligation > 0 ? annualBalance.obligation1 / totalObligation : incomeRatio1
-  const share2 = totalObligation > 0 ? annualBalance.obligation2 / totalObligation : incomeRatio2
-
-  // Divisor de la media: meses con gastos, para no infravalorar el año en curso.
-  const activeMonths     = new Set(expenses.map(e => e.month)).size
-  const prevActiveMonths = new Set(prevYearExpenses.map(e => e.month)).size
-
-  const prevTotalByCat = prevYearExpenses.reduce((acc, e) => {
-    acc.set(e.categoryId, (acc.get(e.categoryId) ?? 0) + e.amount)
-    return acc
-  }, new Map<string, number>())
-
-  const monthlyAvg     = (total: number) => activeMonths     > 0 ? total / activeMonths     : 0
-  const prevMonthlyAvg = (total: number) => prevActiveMonths > 0 ? total / prevActiveMonths : 0
-
-  /** Variación de la media mensual frente al año anterior; null si no hay base con la que comparar. */
-  function avgChangePct(total: number, prevTotal: number): number | null {
-    const prev = prevMonthlyAvg(prevTotal)
-    if (prev === 0) return null
-    return (monthlyAvg(total) - prev) / prev * 100
-  }
+  const monthsDone     = completedMonths(year, now)
+  const prevMonthsDone = completedMonths(year - 1, now)
 
   const categoryTotals = categories
-    .map(cat => ({
-      cat,
-      total: expenses.filter(e => e.categoryId === cat.id).reduce((s, e) => s + e.amount, 0),
-      prevTotal: prevTotalByCat.get(cat.id) ?? 0,
-    }))
+    .map(cat => {
+      const catExp = expenses.filter(e => e.categoryId === cat.id)
+      const avg    = monthlyAvg(catExp, monthsDone)
+      return {
+        cat,
+        total:  catExp.reduce((s, e) => s + e.amount, 0),
+        avg,
+        change: changePct(avg, monthlyAvg(prevYearExpenses.filter(e => e.categoryId === cat.id), prevMonthsDone)),
+      }
+    })
     .filter(c => c.total > 0)
 
-  const totalExpenses     = categoryTotals.reduce((s, c) => s + c.total, 0)
-  const prevTotalExpenses = prevYearExpenses.reduce((s, e) => s + e.amount, 0)
+  const totalExpenses = categoryTotals.reduce((s, c) => s + c.total, 0)
+  const totalAvg      = monthlyAvg(expenses, monthsDone)
+  const totalChange   = changePct(totalAvg, monthlyAvg(prevYearExpenses, prevMonthsDone))
 
   const mData = selectedMonth !== null ? monthData.find(m => m.month === selectedMonth) : null
 
@@ -481,9 +474,9 @@ export function CompartidoAnualView({
           )}
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <AnnualBalanceCard name={p1Name} pct={share1} contribution={annualBalance.contribution1}
+          <AnnualBalanceCard name={p1Name} pct={ratio1} contribution={annualBalance.contribution1}
             obligation={annualBalance.obligation1} balance={annualBalance.balance1} settled={settled} />
-          <AnnualBalanceCard name={p2Name} pct={share2} contribution={annualBalance.contribution2}
+          <AnnualBalanceCard name={p2Name} pct={ratio2} contribution={annualBalance.contribution2}
             obligation={annualBalance.obligation2} balance={annualBalance.balance2} settled={settled} />
         </div>
       </div>
@@ -524,7 +517,7 @@ export function CompartidoAnualView({
                 </tr>
               </thead>
               <tbody>
-                {categoryTotals.map(({ cat, total, prevTotal }) => (
+                {categoryTotals.map(({ cat, total, avg, change }) => (
                   <tr key={cat.id} className="border-b border-border last:border-0">
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
@@ -539,19 +532,15 @@ export function CompartidoAnualView({
                         </span>
                       </div>
                     </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{formatAmountAbs(monthlyAvg(total))}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">
-                      <ChangeCell pct={avgChangePct(total, prevTotal)} />
-                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{avgLabel(avg)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{changeLabel(change)}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums font-medium">{formatAmountAbs(total)}</td>
                   </tr>
                 ))}
                 <tr className="border-t-2 border-border bg-muted/30">
                   <td className="px-4 py-2.5 font-semibold">Total</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold">{formatAmountAbs(monthlyAvg(totalExpenses))}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold">
-                    <ChangeCell pct={avgChangePct(totalExpenses, prevTotalExpenses)} />
-                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold">{avgLabel(totalAvg)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold">{changeLabel(totalChange)}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{formatAmountAbs(totalExpenses)}</td>
                 </tr>
               </tbody>
