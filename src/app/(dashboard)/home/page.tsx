@@ -9,7 +9,7 @@ import {
 import { cn } from "@/lib/utils"
 import { tx } from "@/lib/styles"
 import { formatAmountAbs, formatAmount, formatPctSigned } from "@/lib/format"
-import { MONTHS, getRatio } from "@/lib/gastos"
+import { MONTHS, getAnnualRatio } from "@/lib/gastos"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -125,7 +125,7 @@ export default async function HomePage() {
   const gastosPersonales = gastosTxs.reduce((s, t) => s + t.amount, 0)
   const aportaciones = aportacionesTxs.reduce((s, t) => s + t.amount, 0)
 
-  const { ratio1 } = getRatio(sharedIncomes, prevYear, prevMonth)
+  const { ratio1 } = getAnnualRatio(sharedIncomes, prevYear)
   const gastosCompartidos = sharedExpenses.reduce((s, e) => {
     const r = e.category.splitType === "FIFTY_FIFTY" ? 0.5 : ratio1
     return s + e.amount * r

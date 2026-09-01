@@ -355,7 +355,7 @@ export function GastosMesView({
   const [, startTransition] = useTransition()
   const router = useRouter()
 
-  const balance = calcMonthBalance(expenses, deposits, personIncomes, year, month)
+  const balance = calcMonthBalance(expenses, deposits, personIncomes, year)
 
   // Agrupar gastos por categoría
   const grouped = categories

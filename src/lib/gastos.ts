@@ -117,39 +117,13 @@ function incomeDaysInYear(inc: SharedPersonIncome, year: number): number {
 
 /**
  * Ingreso diario de un tramo: salario anual prorrateado + extra repartido
- * entre los días del tramo. Es la unidad común de `getRatio` y `getAnnualIncome`,
- * para que el % que se muestra y el que se aplica al reparto sean el mismo.
+ * entre los días del tramo. El extra cuenta igual que el salario, así que
+ * cambiarlo mueve el reparto.
  */
 function dailyIncome(inc: SharedPersonIncome, year: number): number {
   const days = incomeDaysInYear(inc, year)
   if (days <= 0) return 0
   return inc.salary / (isLeapYear(year) ? 366 : 365) + inc.extra / days
-}
-
-/**
- * Ratio de contribución proporcional para un mes dado.
- * Pondera por los días que cada persona tiene ingresos activos en ese mes.
- */
-export function getRatio(
-  incomes: SharedPersonIncome[],
-  year: number,
-  month: number,
-): { ratio1: number; ratio2: number } {
-  const mStart = new Date(Date.UTC(year, month - 1, 1))
-  const mEnd   = new Date(Date.UTC(year, month, 0))   // último día del mes
-
-  let s1 = 0, s2 = 0
-  for (const inc of incomes) {
-    const days = overlapDays(new Date(inc.fromDate), new Date(inc.toDate), mStart, mEnd)
-    if (days <= 0) continue
-    const amount = dailyIncome(inc, year) * days
-    if (inc.person === 1) s1 += amount
-    else                   s2 += amount
-  }
-
-  const total = s1 + s2
-  if (total === 0) return { ratio1: 0.5, ratio2: 0.5 }
-  return { ratio1: s1 / total, ratio2: 1 - s1 / total }
 }
 
 /** Ingresos anuales reales de una persona (ingreso diario × días del tramo). */
@@ -159,7 +133,11 @@ export function getAnnualIncome(incomes: SharedPersonIncome[], person: 1 | 2, ye
     .reduce((total, inc) => total + dailyIncome(inc, year) * incomeDaysInYear(inc, year), 0)
 }
 
-/** Ratio de contribución anual ponderado e ingresos totales por persona. */
+/**
+ * Ratio de reparto: la proporción de ingresos anuales de cada persona.
+ * Es el porcentaje de los gastos comunes que le toca pagar, y no varía dentro
+ * del año: los tramos de ingresos ya se ponderan por días al calcular el total.
+ */
 export function getAnnualRatio(
   incomes: SharedPersonIncome[],
   year: number,
@@ -176,9 +154,8 @@ export function calcMonthBalance(
   deposits: SharedDeposit[],
   incomes: SharedPersonIncome[],
   year: number,
-  month: number,
 ): MonthBalance {
-  const { ratio1, ratio2 } = getRatio(incomes, year, month)
+  const { ratio1, ratio2 } = getAnnualRatio(incomes, year)
 
   let obligation1 = 0
   let obligation2 = 0
