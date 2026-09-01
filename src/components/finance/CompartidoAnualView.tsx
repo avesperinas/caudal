@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import { tx, interactive } from "@/lib/styles"
 import { useConfirmDelete } from "@/components/ui/confirm-delete"
-import { formatAmountAbs } from "@/lib/format"
+import { formatAmountAbs, formatPctSigned } from "@/lib/format"
 import {
   MONTHS, SPLIT_LABELS, calcMonthBalance,
   ExpenseWithCategory, getAnnualRatio,
@@ -42,7 +42,11 @@ type Props = {
   sharedAccounts?: { id: string; name: string | null }[]
   /** El colaborador ve Persona 1 ↔ 2 intercambiadas; al guardar hay que revertir. */
   personSwapped?: boolean
+  /** Gastos del año anterior, solo para comparar medias mensuales. */
+  prevYearExpenses?: PrevYearExpense[]
 }
+
+type PrevYearExpense = { categoryId: string; month: number; amount: number }
 
 const fieldCls = "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
 
@@ -246,6 +250,21 @@ function AnnualBalanceCard({ name, pct, contribution, obligation, balance, settl
   )
 }
 
+// ─── Celda de variación anual ─────────────────────────────────────────────────
+
+function ChangeCell({ pct }: { pct: number | null }) {
+  if (pct === null) return <span className={tx.caption}>—</span>
+  return (
+    <span className={cn(
+      pct > 0 ? "text-rose-600 dark:text-rose-400"
+        : pct < 0 ? "text-emerald-600 dark:text-emerald-400"
+        : "text-muted-foreground",
+    )}>
+      {formatPctSigned(pct, 1)}
+    </span>
+  )
+}
+
 // ─── BalanceCard de mes ───────────────────────────────────────────────────────
 
 function MonthBalanceRow({ label, value }: { label: string; value: number }) {
@@ -287,6 +306,7 @@ export function CompartidoAnualView({
   ownerName,
   sharedAccounts = [],
   personSwapped = false,
+  prevYearExpenses = [],
 }: Props) {
   const router  = useRouter()
   const [, startTransition] = useTransition()
@@ -299,7 +319,7 @@ export function CompartidoAnualView({
   const p2Name  = yearConfig?.person2Name ?? "Persona 2"
   const settled = yearConfig?.settled ?? false
 
-  const { ratio1, ratio2 } = getAnnualRatio(personIncomes, year)
+  const { ratio1: incomeRatio1, ratio2: incomeRatio2 } = getAnnualRatio(personIncomes, year)
 
   const now  = new Date()
   const isCY = now.getFullYear() === year
@@ -325,11 +345,41 @@ export function CompartidoAnualView({
     { obligation1: 0, obligation2: 0, contribution1: 0, contribution2: 0, balance1: 0, balance2: 0 },
   )
 
+  // % de reparto realmente aplicado: los gastos 50/50 lo acercan al 50 %, así que
+  // no tiene por qué coincidir con el reparto por ingresos. Sin gastos aún, se cae a este.
+  const totalObligation = annualBalance.obligation1 + annualBalance.obligation2
+  const share1 = totalObligation > 0 ? annualBalance.obligation1 / totalObligation : incomeRatio1
+  const share2 = totalObligation > 0 ? annualBalance.obligation2 / totalObligation : incomeRatio2
+
+  // Divisor de la media: meses con gastos, para no infravalorar el año en curso.
+  const activeMonths     = new Set(expenses.map(e => e.month)).size
+  const prevActiveMonths = new Set(prevYearExpenses.map(e => e.month)).size
+
+  const prevTotalByCat = prevYearExpenses.reduce((acc, e) => {
+    acc.set(e.categoryId, (acc.get(e.categoryId) ?? 0) + e.amount)
+    return acc
+  }, new Map<string, number>())
+
+  const monthlyAvg     = (total: number) => activeMonths     > 0 ? total / activeMonths     : 0
+  const prevMonthlyAvg = (total: number) => prevActiveMonths > 0 ? total / prevActiveMonths : 0
+
+  /** Variación de la media mensual frente al año anterior; null si no hay base con la que comparar. */
+  function avgChangePct(total: number, prevTotal: number): number | null {
+    const prev = prevMonthlyAvg(prevTotal)
+    if (prev === 0) return null
+    return (monthlyAvg(total) - prev) / prev * 100
+  }
+
   const categoryTotals = categories
-    .map(cat => ({ cat, total: expenses.filter(e => e.categoryId === cat.id).reduce((s, e) => s + e.amount, 0) }))
+    .map(cat => ({
+      cat,
+      total: expenses.filter(e => e.categoryId === cat.id).reduce((s, e) => s + e.amount, 0),
+      prevTotal: prevTotalByCat.get(cat.id) ?? 0,
+    }))
     .filter(c => c.total > 0)
 
-  const totalExpenses = categoryTotals.reduce((s, c) => s + c.total, 0)
+  const totalExpenses     = categoryTotals.reduce((s, c) => s + c.total, 0)
+  const prevTotalExpenses = prevYearExpenses.reduce((s, e) => s + e.amount, 0)
 
   const mData = selectedMonth !== null ? monthData.find(m => m.month === selectedMonth) : null
 
@@ -431,9 +481,9 @@ export function CompartidoAnualView({
           )}
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <AnnualBalanceCard name={p1Name} pct={ratio1} contribution={annualBalance.contribution1}
+          <AnnualBalanceCard name={p1Name} pct={share1} contribution={annualBalance.contribution1}
             obligation={annualBalance.obligation1} balance={annualBalance.balance1} settled={settled} />
-          <AnnualBalanceCard name={p2Name} pct={ratio2} contribution={annualBalance.contribution2}
+          <AnnualBalanceCard name={p2Name} pct={share2} contribution={annualBalance.contribution2}
             obligation={annualBalance.obligation2} balance={annualBalance.balance2} settled={settled} />
         </div>
       </div>
@@ -468,40 +518,40 @@ export function CompartidoAnualView({
               <thead>
                 <tr className="border-b border-border bg-muted/40">
                   <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Categoría</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">{p1Name}</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">{p2Name}</th>
-                  <th className="px-4 py-2.5 text-right font-medium text-muted-foreground">Total</th>
+                  <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Media mensual</th>
+                  <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">vs. {year - 1}</th>
+                  <th className="px-4 py-2.5 text-right font-medium text-muted-foreground">Total anual</th>
                 </tr>
               </thead>
               <tbody>
-                {categoryTotals.map(({ cat, total }) => {
-                  const r1 = cat.splitType === "FIFTY_FIFTY" ? 0.5 : ratio1
-                  const r2 = cat.splitType === "FIFTY_FIFTY" ? 0.5 : ratio2
-                  return (
-                    <tr key={cat.id} className="border-b border-border last:border-0">
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{cat.name}</span>
-                          <span className={cn(
-                            "rounded-full px-1.5 py-0.5 text-xs",
-                            cat.splitType === "FIFTY_FIFTY"
-                              ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
-                              : "bg-muted text-muted-foreground",
-                          )}>
-                            {SPLIT_LABELS[cat.splitType as SplitType]}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{formatAmountAbs(total * r1)}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{formatAmountAbs(total * r2)}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums font-medium">{formatAmountAbs(total)}</td>
-                    </tr>
-                  )
-                })}
+                {categoryTotals.map(({ cat, total, prevTotal }) => (
+                  <tr key={cat.id} className="border-b border-border last:border-0">
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{cat.name}</span>
+                        <span className={cn(
+                          "rounded-full px-1.5 py-0.5 text-xs",
+                          cat.splitType === "FIFTY_FIFTY"
+                            ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
+                            : "bg-muted text-muted-foreground",
+                        )}>
+                          {SPLIT_LABELS[cat.splitType as SplitType]}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{formatAmountAbs(monthlyAvg(total))}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">
+                      <ChangeCell pct={avgChangePct(total, prevTotal)} />
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums font-medium">{formatAmountAbs(total)}</td>
+                  </tr>
+                ))}
                 <tr className="border-t-2 border-border bg-muted/30">
                   <td className="px-4 py-2.5 font-semibold">Total</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold">{formatAmountAbs(annualBalance.obligation1)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold">{formatAmountAbs(annualBalance.obligation2)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold">{formatAmountAbs(monthlyAvg(totalExpenses))}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold">
+                    <ChangeCell pct={avgChangePct(totalExpenses, prevTotalExpenses)} />
+                  </td>
                   <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{formatAmountAbs(totalExpenses)}</td>
                 </tr>
               </tbody>

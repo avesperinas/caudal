@@ -71,7 +71,7 @@ export default async function CompartidoAnualPage({
     orderBy: { archivedAt: "desc" },
   })
 
-  const [rawYearConfig, rawPersonIncomes, categories, rawExpenses, rawDeposits] = await Promise.all([
+  const [rawYearConfig, rawPersonIncomes, categories, rawExpenses, rawDeposits, prevYearExpenses] = await Promise.all([
     prisma.sharedYearConfig.findUnique({ where: { userId_year: { userId: ownerUserId, year } } }),
     prisma.sharedPersonIncome.findMany({ where: { userId: ownerUserId, year }, orderBy: { fromDate: "asc" } }),
     prisma.sharedCategory.findMany({ where: { userId: ownerUserId }, orderBy: { order: "asc" } }),
@@ -81,6 +81,11 @@ export default async function CompartidoAnualPage({
       orderBy: { createdAt: "asc" },
     }),
     prisma.sharedDeposit.findMany({ where: { userId: ownerUserId, year }, orderBy: { createdAt: "asc" } }),
+    // Solo para la comparativa de medias mensuales del resumen anual
+    prisma.sharedExpense.findMany({
+      where: { userId: ownerUserId, year: year - 1 },
+      select: { categoryId: true, month: true, amount: true },
+    }),
   ])
 
   // Swap Persona 1 ↔ 2 para que el colaborador se vea como Persona 1
@@ -115,6 +120,7 @@ export default async function CompartidoAnualPage({
         ownerName={ownerName}
         sharedAccounts={sharedAccounts.map(a => ({ id: a.owner.id, name: a.owner.name }))}
         personSwapped={!isOwner}
+        prevYearExpenses={prevYearExpenses}
       />
 
       {/* Datos archivados */}

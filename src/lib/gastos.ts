@@ -107,9 +107,28 @@ function isLeapYear(year: number): boolean {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/** Días de un tramo de ingresos que caen dentro del año. */
+function incomeDaysInYear(inc: SharedPersonIncome, year: number): number {
+  return overlapDays(
+    new Date(inc.fromDate), new Date(inc.toDate),
+    new Date(Date.UTC(year, 0, 1)), new Date(Date.UTC(year, 11, 31)),
+  )
+}
+
+/**
+ * Ingreso diario de un tramo: salario anual prorrateado + extra repartido
+ * entre los días del tramo. Es la unidad común de `getRatio` y `getAnnualIncome`,
+ * para que el % que se muestra y el que se aplica al reparto sean el mismo.
+ */
+function dailyIncome(inc: SharedPersonIncome, year: number): number {
+  const days = incomeDaysInYear(inc, year)
+  if (days <= 0) return 0
+  return inc.salary / (isLeapYear(year) ? 366 : 365) + inc.extra / days
+}
+
 /**
  * Ratio de contribución proporcional para un mes dado.
- * Pondera por los días que cada persona tiene salario activo en ese mes.
+ * Pondera por los días que cada persona tiene ingresos activos en ese mes.
  */
 export function getRatio(
   incomes: SharedPersonIncome[],
@@ -123,8 +142,9 @@ export function getRatio(
   for (const inc of incomes) {
     const days = overlapDays(new Date(inc.fromDate), new Date(inc.toDate), mStart, mEnd)
     if (days <= 0) continue
-    if (inc.person === 1) s1 += days * inc.salary
-    else                   s2 += days * inc.salary
+    const amount = dailyIncome(inc, year) * days
+    if (inc.person === 1) s1 += amount
+    else                   s2 += amount
   }
 
   const total = s1 + s2
@@ -132,22 +152,11 @@ export function getRatio(
   return { ratio1: s1 / total, ratio2: 1 - s1 / total }
 }
 
-/** Ingresos anuales reales de una persona (salario diario ponderado × días + extras). */
+/** Ingresos anuales reales de una persona (ingreso diario × días del tramo). */
 export function getAnnualIncome(incomes: SharedPersonIncome[], person: 1 | 2, year: number): number {
-  const pi = incomes.filter(i => i.person === person)
-  if (pi.length === 0) return 0
-
-  const yStart     = new Date(Date.UTC(year, 0, 1))
-  const yEnd       = new Date(Date.UTC(year, 11, 31))
-  const daysInYear = isLeapYear(year) ? 366 : 365
-
-  let total = 0
-  for (const inc of pi) {
-    const days = overlapDays(new Date(inc.fromDate), new Date(inc.toDate), yStart, yEnd)
-    if (days <= 0) continue
-    total += (inc.salary / daysInYear) * days + inc.extra
-  }
-  return total
+  return incomes
+    .filter(i => i.person === person)
+    .reduce((total, inc) => total + dailyIncome(inc, year) * incomeDaysInYear(inc, year), 0)
 }
 
 /** Ratio de contribución anual ponderado e ingresos totales por persona. */
