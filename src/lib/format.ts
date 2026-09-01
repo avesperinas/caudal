@@ -47,9 +47,9 @@ export function formatPct(value: number, decimals = 2): string {
   }).format(value) + "%"
 }
 
-/** Porcentaje con signo explícito. Ej: "+2,35%" */
+/** Porcentaje con signo explícito. Ej: "+2,35%" / "-2,35%" */
 export function formatPctSigned(value: number, decimals = 2): string {
-  return (value >= 0 ? "+" : "") + formatPct(Math.abs(value), decimals)
+  return (value >= 0 ? "+" : "-") + formatPct(Math.abs(value), decimals)
 }
 
 /** Formatea un número con separador de miles pero sin símbolo de moneda. Ej: "1.500" */
