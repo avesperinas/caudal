@@ -17,7 +17,7 @@ export default async function RegistroGastosAnualPage({
 
   const userId = session.user.id
 
-  const [yearConfig, personIncomes, categories, expenses, deposits] = await Promise.all([
+  const [yearConfig, personIncomes, categories, expenses, deposits, prevYearExpenses] = await Promise.all([
     prisma.sharedYearConfig.findUnique({ where: { userId_year: { userId, year } } }),
     prisma.sharedPersonIncome.findMany({ where: { userId, year }, orderBy: { fromDate: "asc" } }),
     prisma.sharedCategory.findMany({ where: { userId }, orderBy: { order: "asc" } }),
@@ -27,6 +27,11 @@ export default async function RegistroGastosAnualPage({
       orderBy: { createdAt: "asc" },
     }),
     prisma.sharedDeposit.findMany({ where: { userId, year }, orderBy: { createdAt: "asc" } }),
+    // Solo para la comparativa de medias mensuales del resumen anual
+    prisma.sharedExpense.findMany({
+      where: { userId, year: year - 1 },
+      select: { categoryId: true, month: true, amount: true },
+    }),
   ])
 
   return (
@@ -39,6 +44,7 @@ export default async function RegistroGastosAnualPage({
       deposits={deposits}
       ownerUserId={userId}
       isOwner={true}
+      prevYearExpenses={prevYearExpenses}
     />
   )
 }
