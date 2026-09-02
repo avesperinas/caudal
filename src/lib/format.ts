@@ -83,3 +83,12 @@ export function formatDateLong(date: Date): string {
     year: "numeric",
   });
 }
+
+/** Etiqueta corta de mes para ejes de gráfico. Ej: "may 26" */
+export function formatMonthShort(dateMs: number): string {
+  return new Date(dateMs).toLocaleDateString(LOCALE, {
+    month: "short",
+    year: "2-digit",
+    timeZone: "UTC",
+  });
+}
