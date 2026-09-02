@@ -95,13 +95,21 @@ function PortfolioTooltip({ active, payload, label }: TooltipBoxProps) {
 function ProductoExpand({ producto, metricas }: { producto: ProductoInversion; metricas: Metricas }) {
   const chartData = useMemo(() => withLabels(buildProductSeries(producto)), [producto])
 
+  // El capital es el del producto entero. Si es compartido y no hay ninguna
+  // aportación del cotitular registrada, el capital se queda corto frente al
+  // valor y la rentabilidad sale disparada: mejor decirlo que disimularlo.
+  const faltaCotitular = producto.ownership < 100
+    && !producto.aportaciones.some((a) => !a.madeByMe)
+
   const tiles: { label: string; value: string; hint?: string }[] = [
     {
       label: "Capital invertido",
       value: formatAmountAbs(metricas.capitalInvertido),
-      hint: metricas.aportadoPosterior !== 0
-        ? `${formatAmount(metricas.aportadoPosterior)} sin valorar`
-        : undefined,
+      hint: faltaCotitular
+        ? "sin aportaciones del cotitular"
+        : metricas.aportadoPosterior !== 0
+          ? `${formatAmount(metricas.aportadoPosterior)} sin valorar`
+          : undefined,
     },
     metricas.capitalRetirado > 0
       ? { label: "Capital retirado", value: formatAmountAbs(metricas.capitalRetirado) }
@@ -148,6 +156,9 @@ function ProductoExpand({ producto, metricas }: { producto: ProductoInversion; m
               <div key={a.id} className="flex items-center justify-between px-2 py-1 text-xs">
                 <span className="text-muted-foreground">
                   {formatMonthYear(new Date(aportacionMs(a)))}
+                  {!a.madeByMe && (
+                    <span className="ml-2 rounded-full bg-muted px-1.5 py-0.5 text-muted-foreground">cotitular</span>
+                  )}
                   {a.note && <span className="ml-2 italic">· {a.note}</span>}
                 </span>
                 <span className={cn("tabular-nums font-medium",
@@ -220,7 +231,7 @@ function ProductsTableDialog({ rows }: { rows: FilaCartera[] }) {
                           </div>
                         </td>
                         <td className="px-2 py-2 text-right tabular-nums font-medium">
-                          {m.hasData ? formatAmountAbs(m.valorActual) : "—"}
+                          {m.hasData ? formatAmountAbs(m.valor) : "—"}
                         </td>
                         <td className="px-2 py-2 text-right tabular-nums">
                           {formatAmountAbs(m.capitalNeto)}
@@ -334,7 +345,7 @@ export function InversionesView({ products }: { products: ProductoInversion[] })
   const positivo = totales.ganancia >= 0
 
   const rows = useMemo(
-    () => [...porProducto].sort((a, b) => b.metricas.valorActual - a.metricas.valorActual),
+    () => [...porProducto].sort((a, b) => b.metricas.valor - a.metricas.valor),
     [porProducto],
   )
 
@@ -356,7 +367,7 @@ export function InversionesView({ products }: { products: ProductoInversion[] })
           total: 0,
         })
       }
-      map.get(p.type)!.total += m.valorActual
+      map.get(p.type)!.total += m.valor
     }
     const items = [...map.values()].sort((a, b) => b.total - a.total)
     const sum = items.reduce((s, i) => s + i.total, 0)

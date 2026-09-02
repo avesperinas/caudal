@@ -1,10 +1,16 @@
 /**
  * inversiones.ts — cálculo de rentabilidad de la cartera.
  *
- * Regla central: un snapshot se fecha el día 1 y recoge el saldo a principio de
+ * Regla de fecha: un snapshot se fecha el día 1 y recoge el saldo a principio de
  * mes, así que solo refleja lo aportado ESTRICTAMENTE antes de esa fecha. Todo
  * lo que se calcula aquí (capital, ganancia, rentabilidad, TIR y series) acota
  * las aportaciones con ese mismo corte: `estaReflejada()`.
+ *
+ * Regla de titularidad: aquí se habla SIEMPRE del producto entero, nunca de la
+ * parte de un titular. El valor es el del snapshot sin prorratear y el capital
+ * son las aportaciones de todos los titulares, así que `ownership` y `madeByMe`
+ * no se leen en ningún cálculo de este módulo. Mi parte del patrimonio se
+ * prorratea en Patrimonio, y mi flujo de caja se filtra en Flujo y Aportaciones.
  *
  * Sin imports a propósito: el módulo es puro y se puede ejecutar con node para
  * verificarlo sin arrastrar el resto de la app.
@@ -35,7 +41,7 @@ export type ProductoInversion = {
   id: string
   name: string
   type: string
-  /** Porcentaje de titularidad, 0-100. */
+  /** Porcentaje de titularidad, 0-100. Aquí no se usa: es etiqueta de UI. */
   ownership: number
   openedAt: string
   closedAt: string | null
@@ -47,13 +53,11 @@ export type ProductoInversion = {
 export type Metricas = {
   /** Hay al menos un snapshot con el que valorar el producto. */
   hasData: boolean
-  /** Valor del último snapshot, sin prorratear. */
-  valorTotal: number
-  /** Valor del último snapshot prorrateado por ownership. */
-  valorActual: number
+  /** Valor del último snapshot: el producto entero, sin prorratear. */
+  valor: number
   ultimaFecha: string | null
   ultimaFechaMs: number | null
-  /** Aportaciones positivas ya reflejadas en la valoración. */
+  /** Aportaciones positivas de todos los titulares ya reflejadas en la valoración. */
   capitalInvertido: number
   /** Retiradas ya reflejadas en la valoración, en positivo. */
   capitalRetirado: number
@@ -170,8 +174,6 @@ function round2(v: number): number {
 }
 
 export function calcMetricas(p: ProductoInversion): Metricas {
-  const pct = p.ownership / 100
-  const mias = p.aportaciones.filter((a) => a.madeByMe)
   const snap = snapshotVigente(p.snapshots)
 
   // Sin valoración no hay nada que comparar: el capital no cuenta y todo lo
@@ -179,25 +181,24 @@ export function calcMetricas(p: ProductoInversion): Metricas {
   if (!snap) {
     return {
       hasData: false,
-      valorTotal: 0, valorActual: 0,
+      valor: 0,
       ultimaFecha: null, ultimaFechaMs: null,
       capitalInvertido: 0, capitalRetirado: 0, capitalNeto: 0,
-      aportadoPosterior: mias.reduce((s, a) => s + a.amount, 0),
+      aportadoPosterior: p.aportaciones.reduce((s, a) => s + a.amount, 0),
       hasCosteBase: false,
       gananciaAbsoluta: 0, rentabilidad: 0, tir: null,
     }
   }
 
   const snapMs = dateOnlyMs(snap.date)
-  const valorTotal = snap.value
-  const valorActual = valorTotal * pct
+  const valor = snap.value
 
   let capitalInvertido = 0
   let capitalRetirado = 0
   let aportadoPosterior = 0
   const flows: { dateMs: number; amount: number }[] = []
 
-  for (const a of mias) {
+  for (const a of p.aportaciones) {
     if (!estaReflejada(a, snapMs)) {
       aportadoPosterior += a.amount
       continue
@@ -212,15 +213,15 @@ export function calcMetricas(p: ProductoInversion): Metricas {
 
   // Sin coste base el "beneficio" sería el saldo íntegro del producto, que no
   // es una ganancia. Se deja a cero para que no contamine los agregados.
-  const gananciaAbsoluta = hasCosteBase ? valorActual - capitalNeto : 0
+  const gananciaAbsoluta = hasCosteBase ? valor - capitalNeto : 0
   const rentabilidad = hasCosteBase ? (gananciaAbsoluta / capitalNeto) * 100 : 0
 
-  flows.push({ dateMs: snapMs, amount: valorActual })
+  flows.push({ dateMs: snapMs, amount: valor })
   const tir = hasCosteBase ? xirr(flows) : null
 
   return {
     hasData: true,
-    valorTotal, valorActual,
+    valor,
     ultimaFecha: snap.date, ultimaFechaMs: snapMs,
     capitalInvertido, capitalRetirado, capitalNeto,
     aportadoPosterior,
@@ -254,16 +255,16 @@ export function calcCartera(products: ProductoInversion[]): {
     aportadoPosterior += metricas.aportadoPosterior
     if (!metricas.hasData) continue
 
-    valor += metricas.valorActual
+    valor += metricas.valor
     capital += metricas.capitalNeto
     ganancia += metricas.gananciaAbsoluta
 
     const snapMs = metricas.ultimaFechaMs as number
     for (const a of producto.aportaciones) {
-      if (!a.madeByMe || !estaReflejada(a, snapMs)) continue
+      if (!estaReflejada(a, snapMs)) continue
       flows.push({ dateMs: aportacionMs(a), amount: -a.amount })
     }
-    flows.push({ dateMs: snapMs, amount: metricas.valorActual })
+    flows.push({ dateMs: snapMs, amount: metricas.valor })
   }
 
   return {
@@ -292,9 +293,8 @@ export function calcCartera(products: ProductoInversion[]): {
  */
 export function buildPortfolioSeries(products: ProductoInversion[]): SeriePunto[] {
   const prep = products.map((p) => ({
-    pct: p.ownership / 100,
     snaps: ordenados(p.snapshots),
-    mias: p.aportaciones.filter((a) => a.madeByMe),
+    aportaciones: p.aportaciones,
   }))
 
   const fechas = new Set<number>()
@@ -307,12 +307,12 @@ export function buildPortfolioSeries(products: ProductoInversion[]): SeriePunto[
     .map((dateMs) => {
       let valor = 0
       let coste = 0
-      for (const { pct, snaps, mias } of prep) {
+      for (const { snaps, aportaciones } of prep) {
         const s = vigenteEn(snaps, dateMs)
         if (!s) continue
-        valor += s.value * pct
+        valor += s.value
         const snapMs = dateOnlyMs(s.date)
-        for (const a of mias) {
+        for (const a of aportaciones) {
           if (estaReflejada(a, snapMs)) coste += a.amount
         }
       }
