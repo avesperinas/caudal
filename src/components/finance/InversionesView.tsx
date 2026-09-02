@@ -22,21 +22,14 @@ import {
 } from "@/components/finance/Dashboard"
 import { tx } from "@/lib/styles"
 import { cn } from "@/lib/utils"
-import { formatAmountAbs, formatAmount, formatPctSigned } from "@/lib/format"
+import { formatAmountAbs, formatAmount, formatPctSigned, formatMonthShort } from "@/lib/format"
+import { formatMonthYear } from "@/lib/products"
+import {
+  calcCartera, buildPortfolioSeries, buildProductSeries, aportacionMs,
+  type ProductoInversion, type Metricas, type FilaCartera, type SeriePunto,
+} from "@/lib/inversiones"
 
-// ─── Tipos ────────────────────────────────────────────────────────────────────
-
-export type ProductoInversion = {
-  id: string
-  name: string
-  type: string
-  ownership: number
-  openedAt: string
-  closedAt: string | null
-  entity: { id: string; name: string; color: string }
-  snapshots: Array<{ id: string; date: string; value: number }>
-  aportaciones: Array<{ id: string; year: number; month: number; date: string | null; amount: number; madeByMe: boolean; note: string | null }>
-}
+export type { ProductoInversion }
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -61,146 +54,16 @@ const TYPE_COLORS: Record<string, string> = {
   CRYPTO: "#f97316", OTHER: "#94a3b8",
 }
 
-// ─── Métricas por producto ────────────────────────────────────────────────────
+// ─── Puntos de gráfico ───────────────────────────────────────────────────────
 
-function xirr(cashflows: { date: Date; amount: number }[]): number | null {
-  if (cashflows.length < 2) return null
-  const t0 = cashflows[0].date.getTime()
-  const MS_YEAR = 365.25 * 24 * 3600 * 1000
-  const years = cashflows.map((cf) => (cf.date.getTime() - t0) / MS_YEAR)
+type ChartPoint = SeriePunto & { label: string }
 
-  const npv  = (r: number) => cashflows.reduce((s, cf, i) => s + cf.amount / Math.pow(1 + r, years[i]), 0)
-  const dnpv = (r: number) => cashflows.reduce((s, cf, i) => {
-    if (years[i] === 0) return s
-    return s - years[i] * cf.amount / Math.pow(1 + r, years[i] + 1)
-  }, 0)
-
-  let r = 0.1
-  for (let i = 0; i < 100; i++) {
-    const f = npv(r), df = dnpv(r)
-    if (Math.abs(df) < 1e-10 || !isFinite(f)) return null
-    const r2 = r - f / df
-    if (!isFinite(r2) || r2 < -0.9999 || r2 > 50) return null
-    if (Math.abs(r2 - r) < 1e-7) return r2
-    r = r2
-  }
-  return null
+/** La etiqueta del eje es presentación: la serie que viene de lib solo lleva ms. */
+function withLabels(series: SeriePunto[]): ChartPoint[] {
+  return series.map((p) => ({ ...p, label: formatMonthShort(p.dateMs) }))
 }
 
-type Metricas = {
-  valorActual: number
-  valorTotal: number
-  capitalInvertido: number
-  capitalRetirado: number
-  capitalNeto: number
-  gananciaAbsoluta: number
-  rentabilidad: number
-  tir: number | null
-  ultimaFecha: string | null
-  hasData: boolean
-}
-
-function calcMetricas(p: ProductoInversion): Metricas {
-  const pct = p.ownership / 100
-  const hasData = p.snapshots.length > 0
-
-  const valorTotal  = hasData ? p.snapshots[p.snapshots.length - 1].value : 0
-  const valorActual = valorTotal * pct
-  const ultimaFecha = hasData ? p.snapshots[p.snapshots.length - 1].date : null
-
-  const mias = p.aportaciones.filter(a => a.madeByMe)
-  const capitalInvertido = mias.reduce((s, a) => s + Math.max(0, a.amount), 0)
-  const capitalRetirado  = mias.reduce((s, a) => s + Math.max(0, -a.amount), 0)
-  const capitalNeto = capitalInvertido - capitalRetirado
-
-  const gananciaAbsoluta = valorActual - capitalNeto
-  const rentabilidad = capitalNeto > 0 ? (gananciaAbsoluta / capitalNeto) * 100 : 0
-
-  let tir: number | null = null
-  if (hasData && mias.length > 0) {
-    const cfs = [
-      ...mias.map((a) => ({
-        date: a.date ? new Date(a.date) : new Date(a.year, a.month - 1, 1),
-        amount: -a.amount,
-      })),
-      { date: new Date(ultimaFecha!), amount: valorActual },
-    ].sort((a, b) => a.date.getTime() - b.date.getTime())
-    tir = xirr(cfs)
-  }
-
-  return { valorActual, valorTotal, capitalInvertido, capitalRetirado, capitalNeto, gananciaAbsoluta, rentabilidad, tir, ultimaFecha, hasData }
-}
-
-function calcPortfolioTir(products: ProductoInversion[]): number | null {
-  const cfs: { date: Date; amount: number }[] = []
-  let lastDate: Date | null = null
-  let totalValor = 0
-
-  for (const p of products) {
-    const pct = p.ownership / 100
-    for (const a of p.aportaciones.filter(x => x.madeByMe)) {
-      cfs.push({
-        date: a.date ? new Date(a.date) : new Date(a.year, a.month - 1, 1),
-        amount: -a.amount,
-      })
-    }
-    if (p.snapshots.length > 0) {
-      const last = p.snapshots[p.snapshots.length - 1]
-      const d = new Date(last.date)
-      if (!lastDate || d > lastDate) lastDate = d
-      totalValor += last.value * pct
-    }
-  }
-
-  if (cfs.length === 0 || !lastDate || totalValor <= 0) return null
-  cfs.push({ date: lastDate, amount: totalValor })
-  cfs.sort((a, b) => a.date.getTime() - b.date.getTime())
-  return xirr(cfs)
-}
-
-// ─── Serie agregada cartera ──────────────────────────────────────────────────
-
-type PortfolioPoint = { dateMs: number; label: string; valor: number; coste: number }
-
-function buildPortfolioSeries(products: ProductoInversion[]): PortfolioPoint[] {
-  const dates = new Set<number>()
-  for (const p of products) {
-    for (const s of p.snapshots) dates.add(new Date(s.date).getTime())
-    for (const a of p.aportaciones.filter(x => x.madeByMe)) {
-      const d = a.date ? new Date(a.date) : new Date(a.year, a.month - 1, 1)
-      dates.add(d.getTime())
-    }
-  }
-  const sortedMs = [...dates].sort((a, b) => a - b)
-  if (sortedMs.length === 0) return []
-
-  return sortedMs.map((ms) => {
-    let valor = 0
-    let coste = 0
-    for (const p of products) {
-      const pct = p.ownership / 100
-      const snaps = p.snapshots
-        .filter((s) => new Date(s.date).getTime() <= ms)
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      if (snaps.length > 0) valor += snaps[0].value * pct
-
-      for (const a of p.aportaciones) {
-        if (!a.madeByMe) continue
-        const aMs = (a.date ? new Date(a.date) : new Date(a.year, a.month - 1, 1)).getTime()
-        if (aMs <= ms) coste += a.amount
-      }
-    }
-    const d = new Date(ms)
-    return {
-      dateMs: ms,
-      label: d.toLocaleDateString("es-ES", { month: "short", year: "2-digit", timeZone: "UTC" }),
-      valor: Math.round(valor * 100) / 100,
-      coste: Math.round(coste * 100) / 100,
-    }
-  })
-}
-
-function filterSeriesByPeriod(series: PortfolioPoint[], period: Period): PortfolioPoint[] {
+function filterSeriesByPeriod(series: SeriePunto[], period: Period): SeriePunto[] {
   if (period === "todo" || series.length === 0) return series
   const months = period === "6m" ? 6 : period === "1a" ? 12 : 36
   const lastMs = series[series.length - 1].dateMs
@@ -230,38 +93,31 @@ function PortfolioTooltip({ active, payload, label }: TooltipBoxProps) {
 // ─── Tabla modal con detalle expandible ──────────────────────────────────────
 
 function ProductoExpand({ producto, metricas }: { producto: ProductoInversion; metricas: Metricas }) {
-  const chartData = useMemo(() => {
-    const sorted = [...producto.aportaciones]
-      .filter((a) => a.madeByMe)
-      .map((a) => ({
-        date: (a.date ? new Date(a.date) : new Date(a.year, a.month - 1, 1)).getTime(),
-        amount: Math.max(0, a.amount),
-      }))
-      .sort((a, b) => a.date - b.date)
+  const chartData = useMemo(() => withLabels(buildProductSeries(producto)), [producto])
 
-    return producto.snapshots.map((s) => {
-      const snapMs = new Date(s.date).getTime()
-      const coste = sorted.filter((a) => a.date <= snapMs).reduce((sum, a) => sum + a.amount, 0)
-      const d = new Date(s.date)
-      const label = d.toLocaleDateString("es-ES", { month: "short", year: "2-digit", timeZone: "UTC" })
-      return { label, valor: Math.round(s.value * 100) / 100, coste: Math.round(coste * 100) / 100 }
-    })
-  }, [producto])
+  const tiles: { label: string; value: string; hint?: string }[] = [
+    {
+      label: "Capital invertido",
+      value: formatAmountAbs(metricas.capitalInvertido),
+      hint: metricas.aportadoPosterior !== 0
+        ? `${formatAmount(metricas.aportadoPosterior)} sin valorar`
+        : undefined,
+    },
+    metricas.capitalRetirado > 0
+      ? { label: "Capital retirado", value: formatAmountAbs(metricas.capitalRetirado) }
+      : { label: "Capital neto",     value: formatAmountAbs(metricas.capitalNeto) },
+    { label: "Ganancia", value: metricas.hasCosteBase ? formatAmount(metricas.gananciaAbsoluta) : "—" },
+    { label: "TIR anual", value: metricas.tir != null ? formatPctSigned(metricas.tir * 100) : "—" },
+  ]
 
   return (
     <div className="space-y-3 bg-muted/30 px-3 py-3">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {[
-          { label: "Capital invertido", value: formatAmountAbs(metricas.capitalInvertido) },
-          metricas.capitalRetirado > 0
-            ? { label: "Capital retirado", value: formatAmountAbs(metricas.capitalRetirado) }
-            : { label: "Capital neto",     value: formatAmountAbs(metricas.capitalNeto) },
-          { label: "Ganancia", value: formatAmount(metricas.gananciaAbsoluta) },
-          { label: "TIR anual", value: metricas.tir != null ? formatPctSigned(metricas.tir * 100) : "—" },
-        ].map(({ label, value }) => (
+        {tiles.map(({ label, value, hint }) => (
           <div key={label} className="rounded-md border border-border bg-background px-2 py-1.5">
             <p className={tx.caption}>{label}</p>
             <p className="text-xs font-medium tabular-nums">{value}</p>
+            {hint && <p className={cn(tx.microCaption, "tabular-nums")}>{hint}</p>}
           </div>
         ))}
       </div>
@@ -287,11 +143,11 @@ function ProductoExpand({ producto, metricas }: { producto: ProductoInversion; m
       {producto.aportaciones.length > 0 && (
         <div className="max-h-40 overflow-y-auto rounded-md border border-border bg-background divide-y divide-border/40">
           {[...producto.aportaciones]
-            .sort((a, b) => b.year !== a.year ? b.year - a.year : b.month - a.month)
+            .sort((a, b) => aportacionMs(b) - aportacionMs(a))
             .map((a) => (
               <div key={a.id} className="flex items-center justify-between px-2 py-1 text-xs">
                 <span className="text-muted-foreground">
-                  {new Date(a.year, a.month - 1, 1).toLocaleDateString("es-ES", { month: "short", year: "numeric" })}
+                  {formatMonthYear(new Date(aportacionMs(a)))}
                   {a.note && <span className="ml-2 italic">· {a.note}</span>}
                 </span>
                 <span className={cn("tabular-nums font-medium",
@@ -306,14 +162,9 @@ function ProductoExpand({ producto, metricas }: { producto: ProductoInversion; m
   )
 }
 
-function ProductsTableDialog({ products }: { products: ProductoInversion[] }) {
+function ProductsTableDialog({ rows }: { rows: FilaCartera[] }) {
   const [open, setOpen] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
-
-  const rows = useMemo(() => products.map((p) => ({
-    producto: p,
-    metricas: calcMetricas(p),
-  })).sort((a, b) => b.metricas.valorActual - a.metricas.valorActual), [products])
 
   return (
     <>
@@ -343,6 +194,11 @@ function ProductsTableDialog({ products }: { products: ProductoInversion[] }) {
                 {rows.map(({ producto: p, metricas: m }) => {
                   const Icon = TIPO_ICON[p.type] ?? Package
                   const positivo = m.gananciaAbsoluta >= 0
+                  const signo = !m.hasCosteBase
+                    ? "text-muted-foreground"
+                    : positivo
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-rose-600 dark:text-rose-400"
                   const isOpen = expanded === p.id
                   return (
                     <Fragment key={p.id}>
@@ -366,14 +222,19 @@ function ProductsTableDialog({ products }: { products: ProductoInversion[] }) {
                         <td className="px-2 py-2 text-right tabular-nums font-medium">
                           {m.hasData ? formatAmountAbs(m.valorActual) : "—"}
                         </td>
-                        <td className="px-2 py-2 text-right tabular-nums">{formatAmountAbs(m.capitalNeto)}</td>
-                        <td className={cn("px-2 py-2 text-right tabular-nums",
-                          positivo ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
-                          {formatAmount(m.gananciaAbsoluta)}
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {formatAmountAbs(m.capitalNeto)}
+                          {m.aportadoPosterior !== 0 && (
+                            <span className={cn(tx.microCaption, "block tabular-nums")}>
+                              {formatAmount(m.aportadoPosterior)} sin valorar
+                            </span>
+                          )}
                         </td>
-                        <td className={cn("px-2 py-2 text-right tabular-nums font-medium",
-                          positivo ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
-                          {formatPctSigned(m.rentabilidad)}
+                        <td className={cn("px-2 py-2 text-right tabular-nums", signo)}>
+                          {m.hasCosteBase ? formatAmount(m.gananciaAbsoluta) : "—"}
+                        </td>
+                        <td className={cn("px-2 py-2 text-right tabular-nums font-medium", signo)}>
+                          {m.hasCosteBase ? formatPctSigned(m.rentabilidad) : "—"}
                         </td>
                         <td className="px-2 py-2 text-muted-foreground">
                           {isOpen ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
@@ -468,31 +329,24 @@ export function InversionesView({ products }: { products: ProductoInversion[] })
     setSelProducts(new Set([...selProducts].filter(id => validProds.has(id))))
   }
 
-  // ── Totales actuales ──
-  const totales = useMemo(() => {
-    const m = productosFiltrados.filter((p) => p.snapshots.length > 0).map(calcMetricas)
-    return {
-      valor:    m.reduce((s, x) => s + x.valorActual,      0),
-      capital:  m.reduce((s, x) => s + x.capitalNeto,      0),
-      ganancia: m.reduce((s, x) => s + x.gananciaAbsoluta, 0),
-    }
-  }, [productosFiltrados])
-
-  const rentabilidadTotal = totales.capital > 0 ? (totales.ganancia / totales.capital) * 100 : 0
+  // ── Métricas: una sola pasada para KPIs, tabla y distribución ──
+  const { porProducto, totales } = useMemo(() => calcCartera(productosFiltrados), [productosFiltrados])
   const positivo = totales.ganancia >= 0
 
-  const tirAnual = useMemo(() => calcPortfolioTir(productosFiltrados), [productosFiltrados])
+  const rows = useMemo(
+    () => [...porProducto].sort((a, b) => b.metricas.valorActual - a.metricas.valorActual),
+    [porProducto],
+  )
 
   // ── Serie agregada ──
   const series = useMemo(() => buildPortfolioSeries(productosFiltrados), [productosFiltrados])
-  const seriesFiltrada = useMemo(() => filterSeriesByPeriod(series, period), [series, period])
+  const seriesFiltrada = useMemo(() => withLabels(filterSeriesByPeriod(series, period)), [series, period])
   const tickInterval = seriesFiltrada.length > 24 ? 5 : seriesFiltrada.length > 12 ? 2 : 0
 
   // ── Distribución por tipo ──
   const distTipo = useMemo(() => {
     const map = new Map<string, { key: string; label: string; color: string; total: number }>()
-    for (const p of productosFiltrados) {
-      const m = calcMetricas(p)
+    for (const { producto: p, metricas: m } of porProducto) {
       if (!m.hasData) continue
       if (!map.has(p.type)) {
         map.set(p.type, {
@@ -507,7 +361,7 @@ export function InversionesView({ products }: { products: ProductoInversion[] })
     const items = [...map.values()].sort((a, b) => b.total - a.total)
     const sum = items.reduce((s, i) => s + i.total, 0)
     return items.map((i) => ({ ...i, pct: sum > 0 ? (i.total / sum) * 100 : 0 }))
-  }, [productosFiltrados])
+  }, [porProducto])
 
   if (products.length === 0) {
     return (
@@ -548,11 +402,17 @@ export function InversionesView({ products }: { products: ProductoInversion[] })
 
       {/* ── KPIs ── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <KpiCard label="Valor actual" value={formatAmountAbs(totales.valor)} />
+        <KpiCard
+          label="Valor actual"
+          value={formatAmountAbs(totales.valor)}
+          sub={totales.aportadoPosterior !== 0
+            ? `${formatAmount(totales.aportadoPosterior)} sin valorar`
+            : undefined}
+        />
         <KpiCard
           label="TIR anual"
-          value={tirAnual != null ? formatPctSigned(tirAnual * 100) : "—"}
-          accent={tirAnual != null ? (tirAnual >= 0 ? "positive" : "negative") : undefined}
+          value={totales.tir != null ? formatPctSigned(totales.tir * 100) : "—"}
+          accent={totales.tir != null ? (totales.tir >= 0 ? "positive" : "negative") : undefined}
         />
         <KpiCard
           label="Ganancia"
@@ -561,7 +421,7 @@ export function InversionesView({ products }: { products: ProductoInversion[] })
         />
         <KpiCard
           label="Rentabilidad"
-          value={formatPctSigned(rentabilidadTotal)}
+          value={formatPctSigned(totales.rentabilidad)}
           accent={positivo ? "positive" : "negative"}
           trend={positivo ? "up" : "down"}
         />
@@ -635,7 +495,7 @@ export function InversionesView({ products }: { products: ProductoInversion[] })
 
       {/* ── Tabla ── */}
       <div className="flex justify-end">
-        <ProductsTableDialog products={productosFiltrados} />
+        <ProductsTableDialog rows={rows} />
       </div>
     </div>
   )

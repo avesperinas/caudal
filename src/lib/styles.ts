@@ -24,6 +24,8 @@ export const tx = {
   secondary: "text-sm text-muted-foreground",
   /** Texto muy pequeño (fechas, refs, metadata) */
   caption: "text-xs text-muted-foreground",
+  /** Anotación bajo un dato, dentro de tablas densas */
+  microCaption: "text-[10px] text-muted-foreground",
   /** Importe / número con alineación tabular */
   amount: "text-sm font-medium tabular-nums",
   /** Importe grande (balance principal) */
